@@ -55,11 +55,14 @@
         </div>
 
         <!-- 1段目 右: PU確率 -->
-        <div class="cstat-cell">
+        <div class="cstat-cell cstat-pu-cell">
           <div class="cstat-lbl">PU確率</div>
-          <div class="cstat-val-row">
+          <div class="cstat-val-row cstat-pu-val-row">
             <span class="cstat-main-num text-gold"><span id="liveStatPickupRate">0.00</span>%</span>
-            <span class="cstat-sub-txt"><b id="liveStatPickupCount">0</b>人 (期待: <span id="liveStatPickupExpected">0.0</span>)</span>
+            <div class="cstat-sub-stacked">
+              <span class="cstat-sub-count"><b id="liveStatPickupCount">0</b>人</span>
+              <span class="cstat-sub-expected">(期待値<span id="liveStatPickupExpected">0.0</span>人)</span>
+            </div>
           </div>
         </div>
 
@@ -80,7 +83,7 @@
           <div class="cstat-lbl">50%勝率</div>
           <div class="cstat-val-row">
             <span class="cstat-main-num text-green"><span id="liveStatWinRate">0.0</span>%</span>
-            <span class="cstat-sub-txt"><b id="liveStatWinCount">0</b>勝 <b id="liveStatLossCount">0</b>敗 (<span id="liveStatFiftyTotal">0</span>回)</span>
+            <span class="cstat-sub-txt"><b id="liveStatWinCount">0</b>勝 <b id="liveStatLossCount">0</b>敗</span>
           </div>
         </div>
       </div>
@@ -177,18 +180,18 @@
             </div>
           </div>
 
-          <!-- シート操作ボタンバー (2行構成: 1行目=前の10連/1連切替/次の10連, 2行目=この10連削除/10連追加/確定) -->
+          <!-- シート操作ボタンバー (2行構成: 1行目=前ページ/1連切替/次ページ, 2行目=この10連削除/10連追加/確定) -->
           <div class="sheet-control-actions-2rows">
-            <!-- 1行目: ◁ 前の10連へ | 1連に切替 | 次の10連へ ▶ -->
+            <!-- 1行目: ◁ 前ページ | 1連に切替 | 次ページ ▷ -->
             <div class="sheet-action-row-top">
-              <button id="btnPrevPull" class="btn-cyan-outline btn-action-prev" title="前の10連を再編集する">
-                ◁ 前の10連へ
+              <button id="btnPrevPull" class="btn-cyan-outline btn-action-prev" title="前のページを表示">
+                ◁ 前ページ
               </button>
               <button id="btnTogglePullCount" class="btn-toggle-count" title="1連入力と10連入力を切り替える">
                 1連に切替
               </button>
-              <button id="btnSheetSubmitNext" class="btn-cyan-next btn-action-next" title="次の10連へ移動する">
-                次の10連へ ▶
+              <button id="btnSheetSubmitNext" class="btn-cyan-outline btn-action-next" title="次のページを表示">
+                次ページ ▷
               </button>
             </div>
 
@@ -197,7 +200,7 @@
               <button id="btnDeleteCurrentPull" class="btn-danger-outline btn-action-delete" title="現在表示されている10連を履歴から削除して前の10連に戻る">
                 この10連を削除
               </button>
-              <button id="btnAddNextBatch" class="btn-cyan-outline btn-action-add" title="新しい10連を追加する">
+              <button id="btnAddNextBatch" class="btn-primary-action btn-action-add" title="新しい10連を追加する">
                 10連追加
               </button>
               <button id="btnSheetSubmitOk" class="btn-green-submit btn-action-submit" title="入力を確定して集計画面へ進む">
@@ -255,7 +258,7 @@
           <!-- 設定ヘッダー (タイトル & バージョン表記) -->
           <div class="settings-panel-header">
             <span class="card-head-title">⚙️ 設定</span>
-            <span class="version-badge" id="appVersionBadge">v1.0.17</span>
+            <span class="version-badge" id="appVersionBadge">v1.0.18</span>
           </div>
 
           <div class="settings-panel-body">

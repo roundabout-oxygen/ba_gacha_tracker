@@ -1,10 +1,10 @@
 /**
  * ブルーアーカイブ リアルタイムガチャ集計 (BA Gacha Live Tracker)
- * Version: v1.0.17
+ * Version: v1.0.18
  * Core Application Logic & State Management
  */
 
-const APP_VERSION = 'v1.0.17';
+const APP_VERSION = 'v1.0.18';
 const REMOTE_STUDENT_ICONS_URL = 'https://raw.githubusercontent.com/roundabout-oxygen/ba_gacha_tabulation/main/data/student_icons.json';
 
 // 単発 (1連) モードかどうかのフラグ (false = 10連モード, true = 1連モード)
@@ -1148,9 +1148,9 @@ function applyPullModeUI() {
   const batches = getAllBatches();
   const currentEditingId = AppState.currentSession.editingBatchId;
 
-  // ボタンテキスト更新 (1連モード時は「前の1連へ」「この1連を削除」「1連追加」「次の1連へ」に連動)
+  // ボタンテキスト更新
   if (btnPrev) {
-    btnPrev.textContent = isSinglePullMode ? '◁ 前の1連へ' : '◁ 前の10連へ';
+    btnPrev.textContent = '◁ 前ページ';
     if (batches.length === 0 || (currentEditingId && batches.indexOf(currentEditingId) === 0)) {
       btnPrev.disabled = true;
     } else {
@@ -1172,7 +1172,7 @@ function applyPullModeUI() {
   }
 
   if (btnNext) {
-    btnNext.textContent = isSinglePullMode ? '次の1連へ ▶' : '次の10連へ ▶';
+    btnNext.textContent = '次ページ ▷';
   }
 
   if (btnDelete) {
@@ -1692,11 +1692,11 @@ function updateAllStats() {
   const expectedCount = effectiveTotalPulls * expectedRate;
   const diffCount = effectiveThreeStarCount - expectedCount;
 
-  // ピックアップ集計 (PU確率は引いた総回転数に対する割合)
-  const pickupPulls = pulls.filter(p => p.isPick);
-  const pickupCount = pickupPulls.length;
-  const pickupRate = totalPulls > 0 ? (pickupCount / totalPulls) * 100 : 0;
-  const expectedPickup = totalPulls * 0.007;
+  // ピックアップ集計 (チャージ100連目[50%枠]および200連目[100%天井枠]は除外して通常枠のみで計算)
+  const normalPickupPulls = pulls.filter(p => p.isPick && Number(p.charge) !== 100 && Number(p.charge) !== 200);
+  const normalPickupCount = normalPickupPulls.length;
+  const pickupRate = effectiveTotalPulls > 0 ? (normalPickupCount / effectiveTotalPulls) * 100 : 0;
+  const expectedPickup = effectiveTotalPulls * 0.007;
 
   // 50%勝率集計 (charge === 100 のときの勝敗: pickなら勝ち、すり抜けなら負け)
   const fiftyPulls = pulls.filter(p => Number(p.charge) === 100);
@@ -1724,7 +1724,7 @@ function updateAllStats() {
   setText('liveStatThreeStarCount', effectiveThreeStarCount);
   setText('liveStatThreeStarDiff', (diffCount >= 0 ? '+' : '') + diffCount.toFixed(1));
   setText('liveStatPickupRate', pickupRate.toFixed(2));
-  setText('liveStatPickupCount', pickupCount);
+  setText('liveStatPickupCount', normalPickupCount);
   setText('liveStatPickupExpected', expectedPickup.toFixed(1));
   setText('liveStatWinRate', fiftyWinRate.toFixed(1));
   setText('liveStatWinCount', fiftyWins);
@@ -1771,10 +1771,10 @@ function updateAllStats() {
   setText('dashLuckEvaluation', luckEvaluation);
 
   setText('dashPickupRate', pickupRate.toFixed(2));
-  setText('dashPickupCount', pickupCount);
+  setText('dashPickupCount', normalPickupCount);
   setText('dashPickupExpected', expectedPickup.toFixed(1));
-  setText('dashNaturalPickupCount', pickupPulls.filter(p => p.charge !== 200).length);
-  setText('dashCeilingPickupCount', pickupPulls.filter(p => p.charge === 200).length);
+  setText('dashNaturalPickupCount', normalPickupCount);
+  setText('dashCeilingPickupCount', pulls.filter(p => p.isPick && (Number(p.charge) === 100 || Number(p.charge) === 200)).length);
 
   setText('dashWinRate', fiftyWinRate.toFixed(1));
   setText('dashWinsCount', fiftyWins);
