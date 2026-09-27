@@ -69,13 +69,13 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 10px;
 }
 
 .brand-area {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   flex-shrink: 0;
 }
 
@@ -86,7 +86,7 @@ body {
 }
 
 .brand-title {
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 800;
   letter-spacing: 0.5px;
   display: flex;
@@ -115,21 +115,21 @@ body {
 .stats-live-bar {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   flex-grow: 1;
   justify-content: center;
-  overflow-x: auto;
-  padding: 2px 4px;
+  overflow: visible;
+  padding: 2px 0;
 }
 
 .stat-pill {
   background: rgba(255, 255, 255, 0.08);
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: var(--radius-md);
-  padding: 5px 10px;
+  padding: 4px 8px;
   display: flex;
   flex-direction: column;
-  min-width: 120px;
+  min-width: 100px;
   transition: all 0.2s ease;
 }
 
@@ -140,15 +140,14 @@ body {
 
 .pill-label {
   font-size: 10px;
-  color: #94a3b8;
-  font-weight: 600;
-  text-transform: uppercase;
+  color: #cbd5e1;
+  font-weight: 700;
   letter-spacing: 0.3px;
   white-space: nowrap;
 }
 
 .pill-value {
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 800;
   color: #ffffff;
   display: flex;
@@ -157,14 +156,14 @@ body {
 }
 
 .pill-value .unit {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 500;
   color: #cbd5e1;
 }
 
 .pill-sub {
   font-size: 10px;
-  color: #cbd5e1;
+  color: #94a3b8;
   white-space: nowrap;
 }
 
@@ -348,7 +347,7 @@ body {
 
 .welcome-desc {
   font-size: 13px;
-  color: #94a3b8;
+  color: #cbd5e1;
   line-height: 1.5;
 }
 
@@ -357,12 +356,13 @@ body {
   display: flex;
   flex-direction: column;
   gap: 18px;
+  background: #ffffff;
 }
 
 .setup-form-box h3 {
-  font-size: 15px;
-  font-weight: 700;
-  color: #334155;
+  font-size: 16px;
+  font-weight: 800;
+  color: #0f172a;
   border-left: 4px solid var(--primary);
   padding-left: 8px;
 }
@@ -375,8 +375,8 @@ body {
 
 .form-label {
   font-size: 13px;
-  font-weight: 700;
-  color: #334155;
+  font-weight: 800;
+  color: #1e293b;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -384,8 +384,8 @@ body {
 
 .label-hint {
   font-size: 11px;
-  font-weight: 400;
-  color: var(--text-muted);
+  font-weight: 500;
+  color: #475569;
 }
 
 .segmented-control {
@@ -403,12 +403,12 @@ body {
   align-items: center;
   justify-content: center;
   padding: 10px 14px;
-  background: #f1f5f9;
-  border: 2px solid #e2e8f0;
+  background: #f8fafc;
+  border: 2px solid #cbd5e1;
   border-radius: var(--radius-md);
   font-size: 13px;
-  font-weight: 700;
-  color: #475569;
+  font-weight: 800;
+  color: #334155;
   cursor: pointer;
   transition: all 0.15s ease;
 }
@@ -416,13 +416,13 @@ body {
 .segment-opt input:checked + .segment-btn {
   background: var(--primary-light);
   border-color: var(--primary);
-  color: #0369a1;
+  color: #0284c7;
 }
 
 .segment-opt input:checked + .fest-btn {
   background: #fff1f2;
   border-color: var(--secondary);
-  color: #be123c;
+  color: #e11d48;
 }
 
 .form-input {
@@ -430,9 +430,9 @@ body {
   font-size: 14px;
   padding: 9px 12px;
   border-radius: var(--radius-md);
-  border: 1.5px solid var(--border-color);
+  border: 1.5px solid #94a3b8;
   background: #ffffff;
-  color: var(--text-main);
+  color: #0f172a;
   outline: none;
   transition: border-color 0.15s ease;
   width: 100%;
@@ -440,7 +440,7 @@ body {
 
 .form-input:focus {
   border-color: var(--primary);
-  box-shadow: 0 0 0 3px rgba(0, 174, 239, 0.15);
+  box-shadow: 0 0 0 3px rgba(0, 174, 239, 0.2);
 }
 
 .input-with-badge {
@@ -457,16 +457,16 @@ body {
   position: absolute;
   right: 12px;
   font-size: 12px;
-  color: var(--text-muted);
-  font-weight: 600;
+  color: #475569;
+  font-weight: 700;
   pointer-events: none;
 }
 
 .charge-rule-note {
   font-size: 12px;
-  color: #475569;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  color: #334155;
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
   border-radius: var(--radius-md);
   padding: 8px 12px;
   line-height: 1.5;
@@ -947,11 +947,11 @@ body {
 }
 
 .card {
-  background: var(--bg-card);
+  background: #ffffff;
   border-radius: var(--radius-lg);
   padding: 16px;
   box-shadow: var(--shadow-sm);
-  border: 1px solid #e2e8f0;
+  border: 1.5px solid #cbd5e1;
 }
 
 .stat-card {
@@ -969,52 +969,56 @@ body {
 
 .card-title {
   font-size: 13px;
-  font-weight: 700;
-  color: #475569;
+  font-weight: 800;
+  color: #1e293b;
 }
 
 .card-badge {
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 800;
-  padding: 2px 6px;
+  padding: 2px 8px;
   border-radius: 4px;
   background: #f1f5f9;
-  color: #475569;
+  color: #1e293b;
+  border: 1px solid #cbd5e1;
 }
 
 .highlight-pu-badge {
   background: #fef3c7;
-  color: #b45309;
+  color: #92400e;
+  border-color: #f59e0b;
 }
 
 .highlight-win-badge {
   background: #d1fae5;
-  color: #047857;
+  color: #065f46;
+  border-color: #10b981;
 }
 
 .card-main-val {
-  font-size: 26px;
+  font-size: 28px;
   font-weight: 900;
-  color: #1e293b;
+  color: #0f172a;
   margin-bottom: 6px;
 }
 
 .card-main-val .unit {
   font-size: 14px;
-  font-weight: 600;
-  color: var(--text-muted);
+  font-weight: 700;
+  color: #475569;
 }
 
 .card-sub-info {
-  font-size: 11px;
-  color: var(--text-muted);
+  font-size: 12px;
+  color: #475569;
   display: flex;
   flex-direction: column;
   gap: 2px;
+  font-weight: 600;
 }
 
 .card-sub-info b {
-  color: #1e293b;
+  color: #0f172a;
 }
 
 /* 折れ線グラフカード (単一確率線に最適化) */
@@ -1034,20 +1038,22 @@ body {
 
 .chart-title-wrap .card-title {
   font-size: 15px;
-  color: #1e293b;
+  font-weight: 800;
+  color: #0f172a;
 }
 
 .chart-subtext {
-  font-size: 11px;
-  color: var(--text-muted);
+  font-size: 12px;
+  color: #475569;
+  font-weight: 500;
 }
 
 .chart-legend-box {
   display: flex;
   gap: 12px;
   font-size: 12px;
-  font-weight: 600;
-  color: #475569;
+  font-weight: 700;
+  color: #1e293b;
 }
 
 .legend-item {
@@ -1059,7 +1065,7 @@ body {
 .legend-line {
   display: inline-block;
   width: 18px;
-  height: 3px;
+  height: 4px;
   border-radius: 2px;
 }
 
@@ -1068,8 +1074,8 @@ body {
 }
 
 .line-target {
-  background: #94a3b8;
-  border-top: 1px dashed #64748b;
+  background: #64748b;
+  border-top: 1px dashed #334155;
 }
 
 .chart-wrapper {
@@ -1088,32 +1094,33 @@ body {
 
 .analysis-item {
   background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  border: 1.5px solid #cbd5e1;
   border-radius: var(--radius-md);
   padding: 12px;
 }
 
 .analysis-label {
-  font-size: 11px;
-  font-weight: 700;
-  color: #64748b;
+  font-size: 12px;
+  font-weight: 800;
+  color: #475569;
   margin-bottom: 4px;
 }
 
 .analysis-val {
-  font-size: 20px;
-  font-weight: 800;
-  color: #1e293b;
+  font-size: 22px;
+  font-weight: 900;
+  color: #0f172a;
   margin-bottom: 2px;
 }
 
 .analysis-val.warning {
-  color: #f59e0b;
+  color: #d97706;
 }
 
 .analysis-sub {
-  font-size: 11px;
-  color: var(--text-muted);
+  font-size: 12px;
+  color: #475569;
+  font-weight: 600;
 }
 
 /* 排出☆3生徒図鑑 (横並びカードレイアウト ＆ 凸数バッジ ＆ 枠色) */
@@ -1641,11 +1648,23 @@ body {
 
 .modal-footer {
   background: #f8fafc;
-  border-top: 1px solid #e2e8f0;
+  border-top: 1.5px solid #cbd5e1;
   padding: 12px 20px;
   display: flex;
   justify-content: flex-end;
   gap: 10px;
+}
+
+.modal-footer .btn-secondary {
+  background: #ffffff;
+  color: #1e293b;
+  border: 1.5px solid #cbd5e1;
+  font-weight: 700;
+}
+
+.modal-footer .btn-secondary:hover {
+  background: #f1f5f9;
+  border-color: #94a3b8;
 }
 
 .btn-primary {

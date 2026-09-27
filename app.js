@@ -94,7 +94,27 @@ document.addEventListener('DOMContentLoaded', async () => {
   initCropperEngine();
 
   // 画面状態の復元
-  if (AppState.pulls.length > 0) {
+  const urlParams = new URLSearchParams(window.location.search);
+  const requestedView = urlParams.get('view');
+  const isDemo = urlParams.get('demo');
+
+  // デモデータ注入（テスト用）
+  if (isDemo && AppState.pulls.length === 0) {
+    loadDemoGachaData();
+  }
+
+  if (requestedView === 'sheet') {
+    showGachaInputView(10);
+  } else if (requestedView === 'custom') {
+    setTimeout(() => {
+      document.getElementById('btnOpenCustomModal').click();
+      loadDefaultSampleImageForCropper();
+    }, 200);
+  } else if (requestedView === 'editor') {
+    setTimeout(() => {
+      openCustomEditorModal();
+    }, 200);
+  } else if (requestedView === 'dashboard' || AppState.pulls.length > 0) {
     showDashboardView();
   } else {
     showWelcomeView();
@@ -103,6 +123,66 @@ document.addEventListener('DOMContentLoaded', async () => {
   // 統計とヘッダーの初回更新
   updateAllStats();
 });
+
+/**
+ * テスト・デモ用のガチャデータ生成
+ */
+function loadDemoGachaData() {
+  AppState.config.rate = 0.03;
+  AppState.config.initCharge = 94; // 添付2枚目の例（95連目スタート）
+  AppState.config.pickupStudents = ['ココロ'];
+
+  const demoPulls = [];
+  // 1〜10連目（累計1〜10、チャージ95〜104）
+  const names = ['', '', '', '', '', 'ヒナ', '', '', '', 'ココロ'];
+  let charge = 94;
+  for (let i = 0; i < 10; i++) {
+    charge += 1;
+    const name = names[i];
+    const isPick = name === 'ココロ';
+    const isThreeStar = Boolean(name);
+    const isGuaranteed50 = (charge === 100);
+    demoPulls.push({
+      id: i + 1,
+      pullType: '10',
+      batchId: 'demo_batch_1',
+      seqInBatch: i + 1,
+      totalPullIndex: i + 1,
+      charge: charge,
+      studentName: name,
+      isThreeStar: isThreeStar,
+      isPick: isPick,
+      isNew: isThreeStar,
+      isGuaranteed50: isGuaranteed50,
+      isGuaranteed100: false,
+      createdAt: new Date().toISOString()
+    });
+    if (isPick) charge = 0;
+  }
+
+  AppState.pulls = demoPulls;
+  persistState();
+}
+
+/**
+ * クロッパーに初期サンプル画像（ココロ）をロード
+ */
+function loadDefaultSampleImageForCropper() {
+  const img = new Image();
+  img.onload = () => {
+    CropperState.img = img;
+    resetCropperPosition();
+    const tools = document.getElementById('cropperTools');
+    if (tools) tools.style.display = 'flex';
+    const ph = document.getElementById('cropPlaceholder');
+    if (ph) ph.style.display = 'none';
+    const nameInput = document.getElementById('customStudentName');
+    if (nameInput) nameInput.value = 'ココロ';
+    drawCropCanvas();
+    checkCustomSaveButtonState();
+  };
+  img.src = 'data/temp_students/kokoro_sample.png';
+}
 
 // ==========================================================================
 // ストレージ保存・読み込み
