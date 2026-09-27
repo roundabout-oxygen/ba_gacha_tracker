@@ -1,10 +1,10 @@
 /**
  * ブルーアーカイブ リアルタイムガチャ集計 (BA Gacha Live Tracker)
- * Version: v1.0.15
+ * Version: v1.0.16
  * Core Application Logic & State Management
  */
 
-const APP_VERSION = 'v1.0.15';
+const APP_VERSION = 'v1.0.16';
 const REMOTE_STUDENT_ICONS_URL = 'https://raw.githubusercontent.com/roundabout-oxygen/ba_gacha_tabulation/main/data/student_icons.json';
 
 // 単発 (1連) モードかどうかのフラグ (false = 10連モード, true = 1連モード)
@@ -645,26 +645,7 @@ function setupInputSheet() {
  * 視覚的タイムライン＆ページナビゲーター (添付画像準拠: 節目クリックでジャンプ・☆3ドット表示)
  * =========================================================================
  */
-let timelineTooltipEl = null;
 
-function showTimelineTooltip(e, text) {
-  if (!timelineTooltipEl) {
-    timelineTooltipEl = document.createElement('div');
-    timelineTooltipEl.className = 'timeline-tooltip';
-    document.body.appendChild(timelineTooltipEl);
-  }
-  timelineTooltipEl.textContent = text;
-  timelineTooltipEl.style.display = 'block';
-  const rect = e.target.getBoundingClientRect();
-  timelineTooltipEl.style.left = `${rect.left + rect.width / 2}px`;
-  timelineTooltipEl.style.top = `${rect.top}px`;
-}
-
-function hideTimelineTooltip() {
-  if (timelineTooltipEl) {
-    timelineTooltipEl.style.display = 'none';
-  }
-}
 
 /**
  * 指定した連番 (targetPullNumber) を含むバッチへジャンプする処理
@@ -822,18 +803,9 @@ function renderSheetTimelineNav() {
       tick.className = 'timeline-tick';
       tick.style.left = `${pct}%`;
       tick.setAttribute('data-pull', pullNum);
-      const tooltipMsg = `${pullNum}連の節目 (クリックでジャンプ)`;
-      tick.title = tooltipMsg;
 
-      tick.addEventListener('mouseenter', (e) => {
-        showTimelineTooltip(e, tooltipMsg);
-      });
-      tick.addEventListener('mouseleave', () => {
-        hideTimelineTooltip();
-      });
       tick.addEventListener('click', (e) => {
         e.stopPropagation();
-        hideTimelineTooltip();
         jumpToPullBatch(pullNum);
       });
 
@@ -904,19 +876,8 @@ function renderSheetTimelineNav() {
       const pct = Math.max(0, Math.min(100, (pIdx / timelineMaxLimit) * 100));
       dot.style.left = `${pct}%`;
 
-      const typeLabel = p.isPick ? 'ピックアップ' : (p.isNew ? '新規' : 'すり抜け');
-      const tooltipMsg = `${pIdx}連: ${p.studentName} (${typeLabel})`;
-      dot.title = tooltipMsg;
-
-      dot.addEventListener('mouseenter', (e) => {
-        showTimelineTooltip(e, tooltipMsg);
-      });
-      dot.addEventListener('mouseleave', () => {
-        hideTimelineTooltip();
-      });
       dot.addEventListener('click', (e) => {
         e.stopPropagation();
-        hideTimelineTooltip();
         jumpToPullBatch(pIdx);
       });
 
