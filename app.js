@@ -1,10 +1,10 @@
 /**
  * ブルーアーカイブ リアルタイムガチャ集計 (BA Gacha Live Tracker)
- * Version: v1.0.21
+ * Version: v1.0.22
  * Core Application Logic & State Management
  */
 
-const APP_VERSION = 'v1.0.21';
+const APP_VERSION = 'v1.0.22';
 const REMOTE_STUDENT_ICONS_URL = 'https://raw.githubusercontent.com/roundabout-oxygen/ba_gacha_tabulation/main/data/student_icons.json';
 
 // 単発 (1連) モードかどうかのフラグ (false = 10連モード, true = 1連モード)
@@ -421,105 +421,137 @@ function switchTab(tabId) {
 }
 
 // ==========================================================================
-// チャージ計算ロジック
+// チャージ計算ロジック (Single Source of Truth: AppState.pulls)
 // ==========================================================================
 
 /**
- * 全ての引き（確定済み履歴 ＋ 現在編集中または新規のシート内容）を時系列順にシミュレートし、
- * 正確に再計算された pulls 配列を返す。
- * これにより、過去のバッチを再編集中に pick を変更した場合でも、
- * その後の全バッチおよび最終ページの最下段チャージまで即座に正確に反映される。
+ * 確定済み（または最新）の最終チャージを取得
+ * pulls が空なら引継ぎ設定（initCharge）を返す
  */
-function getSimulatedAllPulls() {
-  const pulls = [];
-  const currentEditingId = AppState.currentSession ? AppState.currentSession.editingBatchId : null;
-  const currentRows = (AppState.currentSession && AppState.currentSession.rows) ? AppState.currentSession.rows : [];
-  const validCurrentRows = isSinglePullMode ? (currentRows[0] ? [currentRows[0]] : []) : currentRows;
-
-  if (currentEditingId) {
-    // 過去のバッチを再編集・閲覧中
-    const batches = getAllBatches();
-    batches.forEach(bId => {
-      if (bId === currentEditingId) {
-        validCurrentRows.forEach(r => {
-          if (r) {
-            pulls.push({
-              totalPullIndex: r.total,
-              isPick: Boolean(r.isPick),
-              studentName: r.studentName ? normalizeStudentName(r.studentName) : '',
-              isThreeStar: Boolean(r.studentName && r.studentName.trim()),
-              isNew: Boolean(r.isNew)
-            });
-          }
-        });
-      } else {
-        const batchItems = AppState.pulls.filter(p => p.batchId === bId);
-        batchItems.forEach(p => pulls.push({ ...p }));
-      }
-    });
-  } else {
-    // editingBatchId がない場合: 確定済みの AppState.pulls のみをクローン
-    // 未確定の空シート行を勝手に末尾に追加してはならない！
-    AppState.pulls.forEach(p => pulls.push({ ...p }));
-
-    // まだ pulls が0件で、かつシートに入力（生徒名またはpick）がある場合のみ反映
-    if (AppState.pulls.length === 0) {
-      const hasInput = validCurrentRows.some(r => r && ((r.studentName && r.studentName.trim()) || r.isPick));
-      if (hasInput) {
-        validCurrentRows.forEach(r => {
-          if (r) {
-            pulls.push({
-              totalPullIndex: r.total,
-              isPick: Boolean(r.isPick),
-              studentName: r.studentName ? normalizeStudentName(r.studentName) : '',
-              isThreeStar: Boolean(r.studentName && r.studentName.trim()),
-              isNew: Boolean(r.isNew)
-            });
-          }
-        });
-      }
-    }
-  }
-
-  // もし引きが一切なければ空配列
-  if (pulls.length === 0) return [];
-
-  // チャージと連番を時系列順に完全再計算
-  let runningCharge = Number(AppState.config.initCharge) || 0;
-  pulls.forEach((p, idx) => {
-    p.totalPullIndex = idx + 1;
-    runningCharge += 1;
-    p.charge = runningCharge;
-    if (p.isPick || runningCharge === 200) {
-      runningCharge = 0;
-    }
-  });
-
-  return pulls;
-}
-
-/**
- * 直前までのチャージ数を計算
- */
-function calculateCurrentCharge() {
-  const simulatedPulls = getSimulatedAllPulls();
-  if (simulatedPulls.length > 0) {
-    return simulatedPulls[simulatedPulls.length - 1].charge;
+function getLastCommittedCharge() {
+  if (AppState.pulls && AppState.pulls.length > 0) {
+    return AppState.pulls[AppState.pulls.length - 1].charge;
   }
   return Number(AppState.config.initCharge) || 0;
 }
 
 /**
- * 最終ページの最下段（最新の引きの最終行）におけるチャージ数を取得
+ * 上部バー等に表示する最新チャージ数
  * ユーザー要望: 「上に表示されているチャージは最終ページの最下段のチャージを表示してください。
  * 前の10連へで表示を前に戻すと変化しますがそうならないようにお願いします」
  */
 function getActiveDisplayCharge() {
-  const simulatedPulls = getSimulatedAllPulls();
-  if (simulatedPulls.length > 0) {
-    return simulatedPulls[simulatedPulls.length - 1].charge;
+  return getLastCommittedCharge();
+}
+
+/**
+ * 直前までのチャージ数を取得（互換用）
+ */
+function calculateCurrentCharge() {
+  return getLastCommittedCharge();
+}
+
+/**
+ * 全 pull の totalPullIndex, charge, isGuaranteed50, isGuaranteed100 を時系列順に一括再計算
+ */
+function recalculatePullsIndexAndCharge() {
+  let runningCharge = Number(AppState.config.initCharge) || 0;
+  AppState.pulls.forEach((p, idx) => {
+    p.totalPullIndex = idx + 1;
+    runningCharge += 1;
+    p.charge = runningCharge;
+    p.isGuaranteed50 = (runningCharge === 100);
+    p.isGuaranteed100 = (runningCharge === 200);
+    if (p.isPick || runningCharge === 200) {
+      runningCharge = 0;
+    }
+  });
+}
+
+/**
+ * 現在のシート入力内容を AppState.pulls に同期し、全履歴の整合性を再計算
+ */
+function syncCurrentSessionToPulls() {
+  const session = AppState.currentSession;
+  if (!session || !session.rows || session.rows.length === 0) return;
+
+  const pullType = isSinglePullMode ? '1' : '10';
+  const targetRows = isSinglePullMode ? [session.rows[0]] : session.rows;
+  const editingBatchId = session.editingBatchId;
+
+  if (editingBatchId) {
+    // 既存バッチの更新
+    const firstIdx = AppState.pulls.findIndex(p => p.batchId === editingBatchId);
+    if (firstIdx !== -1) {
+      const existingInBatch = AppState.pulls.filter(p => p.batchId === editingBatchId);
+      const originalCount = existingInBatch.length;
+      const createdAt = existingInBatch[0] ? existingInBatch[0].createdAt : new Date().toISOString();
+
+      const updatedPulls = targetRows.map((r, i) => {
+        const isThreeStar = Boolean(r.studentName && r.studentName.trim());
+        return {
+          id: existingInBatch[i] ? existingInBatch[i].id : (firstIdx + i + 1),
+          pullType: pullType,
+          batchId: editingBatchId,
+          seqInBatch: r.seq,
+          totalPullIndex: r.total,
+          charge: r.charge,
+          studentName: r.studentName ? normalizeStudentName(r.studentName) : '',
+          isThreeStar: isThreeStar,
+          isPick: Boolean(r.isPick),
+          isNew: Boolean(r.isNew),
+          isGuaranteed50: Boolean(r.isGuaranteed50),
+          isGuaranteed100: Boolean(r.isGuaranteed100),
+          createdAt: createdAt
+        };
+      });
+
+      AppState.pulls.splice(firstIdx, originalCount, ...updatedPulls);
+    }
+  } else {
+    // まだバッチIDがない新規シートの場合、生徒名またはpickに入力があったら正式追加
+    const hasAnyContent = targetRows.some(r => (r.studentName && r.studentName.trim()) || r.isPick);
+    if (hasAnyContent) {
+      const batchId = 'batch_' + Date.now();
+      session.editingBatchId = batchId;
+      targetRows.forEach(r => {
+        const isThreeStar = Boolean(r.studentName && r.studentName.trim());
+        AppState.pulls.push({
+          id: AppState.pulls.length + 1,
+          pullType: pullType,
+          batchId: batchId,
+          seqInBatch: r.seq,
+          totalPullIndex: r.total,
+          charge: r.charge,
+          studentName: r.studentName ? normalizeStudentName(r.studentName) : '',
+          isThreeStar: isThreeStar,
+          isPick: Boolean(r.isPick),
+          isNew: Boolean(r.isNew),
+          isGuaranteed50: Boolean(r.isGuaranteed50),
+          isGuaranteed100: Boolean(r.isGuaranteed100),
+          createdAt: new Date().toISOString()
+        });
+      });
+    }
   }
-  return Number(AppState.config.initCharge) || 0;
+
+  // 全履歴の連番・チャージ・天井を一括再計算
+  recalculatePullsIndexAndCharge();
+
+  // 現在表示中バッチの行チャージも AppState.pulls から最新の値を取り込んで同期
+  if (session.editingBatchId) {
+    const curPulls = AppState.pulls.filter(p => p.batchId === session.editingBatchId);
+    session.rows.forEach((r, idx) => {
+      if (curPulls[idx]) {
+        r.total = curPulls[idx].totalPullIndex;
+        r.charge = curPulls[idx].charge;
+        r.isGuaranteed50 = curPulls[idx].isGuaranteed50;
+        r.isGuaranteed100 = curPulls[idx].isGuaranteed100;
+      }
+    });
+  }
+
+  persistState();
 }
 
 /**
@@ -529,71 +561,64 @@ function getActiveDisplayCharge() {
 function recalculateCurrentSessionCharges() {
   if (!AppState.currentSession.rows || AppState.currentSession.rows.length === 0) return;
 
-  // 開始直前のチャージ数を取得
-  let startCharge = 0;
-  const currentEditingId = AppState.currentSession.editingBatchId;
-  if (currentEditingId) {
-    const batches = getAllBatches();
-    const currentIdx = batches.indexOf(currentEditingId);
-    if (currentIdx > 0) {
-      const prevBatchId = batches[currentIdx - 1];
-      const prevPulls = AppState.pulls.filter(p => p.batchId === prevBatchId);
-      if (prevPulls.length > 0) {
-        startCharge = prevPulls[prevPulls.length - 1].charge;
-      }
-    } else {
-      startCharge = Number(AppState.config.initCharge) || 0;
-    }
+  const session = AppState.currentSession;
+  const rows = session.rows;
+
+  if (session.editingBatchId) {
+    syncCurrentSessionToPulls();
   } else {
-    if (AppState.pulls.length > 0) {
-      startCharge = AppState.pulls[AppState.pulls.length - 1].charge;
+    const hasAnyContent = rows.some(r => (r.studentName && r.studentName.trim()) || r.isPick);
+    if (hasAnyContent) {
+      syncCurrentSessionToPulls();
     } else {
-      startCharge = Number(AppState.config.initCharge) || 0;
+      let runningCharge = getLastCommittedCharge();
+      rows.forEach((r, idx) => {
+        runningCharge += 1;
+        r.charge = runningCharge;
+        r.isGuaranteed50 = (runningCharge === 100);
+        r.isGuaranteed100 = (runningCharge === 200);
+        if (r.isPick || runningCharge === 200) {
+          runningCharge = 0;
+        }
+      });
     }
   }
 
-  let runningCharge = startCharge;
+  // DOMを最新の row.charge に合わせて更新
   const tbody = document.getElementById('gachaSheetTbody');
   const trList = tbody ? tbody.querySelectorAll('tr') : [];
 
-  AppState.currentSession.rows.forEach((row, idx) => {
-    runningCharge += 1;
-    row.charge = runningCharge;
-    row.isGuaranteed50 = (runningCharge === 100);
-    row.isGuaranteed100 = (runningCharge === 200);
-
-    // DOM更新
+  rows.forEach((row, idx) => {
     if (trList[idx]) {
       const tr = trList[idx];
       const tdCharge = tr.querySelector('.col-charge');
+      const tdTotal = tr.querySelector('.col-total');
+
+      if (tdTotal) tdTotal.textContent = row.total;
+
       if (tdCharge) {
-        let label = runningCharge;
-        if (runningCharge === 100) label += ' (50%)';
-        else if (runningCharge === 200) label = '200天井';
+        let label = row.charge;
+        if (row.charge === 100) label += ' (50%)';
+        else if (row.charge === 200) label = '200天井';
         tdCharge.textContent = label;
 
-        if (runningCharge > 100) {
+        if (row.charge > 100) {
           tdCharge.classList.add('charge-danger');
         } else {
           tdCharge.classList.remove('charge-danger');
         }
       }
 
-      if (runningCharge === 100 || runningCharge === 200) {
+      if (row.charge === 100 || row.charge === 200) {
         tr.classList.add('row-charge-100');
       } else {
         tr.classList.remove('row-charge-100');
       }
     }
-
-    // pickに☑が入っていれば、次の行のガチャはチャージ1から開始！
-    if (row.isPick || runningCharge === 200) {
-      runningCharge = 0;
-    }
   });
 
-  // 上部の集計データ（☆3確率、PU確率、最終ページ最下段チャージ数等）も即時反映！
   updateAllStats();
+  renderSheetTimelineNav();
 }
 
 // ==========================================================================
@@ -623,7 +648,7 @@ function setupInputSheet() {
   AppState.currentSession.editingBatchId = null;
   AppState.currentSession.pullCount = isSinglePullMode ? 1 : 10;
   const currentTotal = AppState.pulls.length;
-  let runningCharge = calculateCurrentCharge();
+  let runningCharge = getLastCommittedCharge();
 
   const rows = [];
   for (let i = 0; i < 10; i++) {
@@ -654,6 +679,7 @@ function setupInputSheet() {
   renderInputSheetTable();
   updateAllStats();
   updateSheetPageIndicator();
+  renderSheetTimelineNav();
 }
 
 /**
@@ -946,20 +972,6 @@ function triggerSheetSlideAnimation(direction) {
   tbody.classList.add(direction === 'left' ? 'slide-from-left' : 'slide-from-right');
 }
 
-/**
- * 全 pull の totalPullIndex と charge を時系列順に再計算して整合性を維持
- */
-function recalculatePullsIndexAndCharge() {
-  let runningCharge = Number(AppState.config.initCharge) || 0;
-  AppState.pulls.forEach((p, idx) => {
-    p.totalPullIndex = idx + 1;
-    runningCharge += 1;
-    p.charge = runningCharge;
-    if (p.isPick || runningCharge === 200) {
-      runningCharge = 0;
-    }
-  });
-}
 
 /**
  * 指定した batchId のデータをシートに読み込む
@@ -1067,7 +1079,7 @@ function addNewBatchImmediately() {
   const pullType = isSinglePullMode ? '1' : '10';
   const batchId = 'batch_' + Date.now();
   const currentTotal = AppState.pulls.length;
-  let runningCharge = calculateCurrentCharge();
+  let runningCharge = getLastCommittedCharge();
 
   for (let i = 0; i < count; i++) {
     const seq = i + 1;
@@ -1607,96 +1619,20 @@ document.addEventListener('click', (e) => {
 // ==========================================================================
 
 function commitCurrentSheet() {
-  const rows = AppState.currentSession.rows;
-  if (!rows || rows.length === 0) return;
-
-  const pullType = isSinglePullMode ? '1' : '10';
-  const targetRows = isSinglePullMode ? [rows[0]] : rows;
-  const editingBatchId = AppState.currentSession.editingBatchId;
-
-  if (editingBatchId) {
-    // 既存バッチの再編集・上書き
-    const firstIdx = AppState.pulls.findIndex(p => p.batchId === editingBatchId);
-    if (firstIdx !== -1) {
-      const existingInBatch = AppState.pulls.filter(p => p.batchId === editingBatchId);
-      const originalCount = existingInBatch.length;
-      const createdAt = existingInBatch[0] ? existingInBatch[0].createdAt : new Date().toISOString();
-
-      const updatedPulls = targetRows.map((r, i) => {
-        const isThreeStar = Boolean(r.studentName && r.studentName.trim());
-        return {
-          id: existingInBatch[i] ? existingInBatch[i].id : (AppState.pulls.length + i + 1),
-          pullType: pullType,
-          batchId: editingBatchId,
-          seqInBatch: r.seq,
-          totalPullIndex: r.total,
-          charge: r.charge,
-          studentName: r.studentName ? normalizeStudentName(r.studentName) : '',
-          isThreeStar: isThreeStar,
-          isPick: Boolean(r.isPick),
-          isNew: Boolean(r.isNew),
-          isGuaranteed50: Boolean(r.isGuaranteed50),
-          isGuaranteed100: Boolean(r.isGuaranteed100),
-          createdAt: createdAt
-        };
-      });
-
-      AppState.pulls.splice(firstIdx, originalCount, ...updatedPulls);
-    }
-  } else {
-    // 新規バッチ追加：入力（生徒名またはpick）がある場合のみ正式追加！
-    const hasAnyContent = targetRows.some(r => (r.studentName && r.studentName.trim()) || r.isPick);
-    if (!hasAnyContent) {
-      // 完全な空シートならAppState.pullsにゴミを追加せず終了
-      return;
-    }
-
-    const batchId = 'batch_' + Date.now();
-    targetRows.forEach(r => {
-      const isThreeStar = Boolean(r.studentName && r.studentName.trim());
-      AppState.pulls.push({
-        id: AppState.pulls.length + 1,
-        pullType: pullType,
-        batchId: batchId,
-        seqInBatch: r.seq,
-        totalPullIndex: r.total,
-        charge: r.charge,
-        studentName: r.studentName ? normalizeStudentName(r.studentName) : '',
-        isThreeStar: isThreeStar,
-        isPick: Boolean(r.isPick),
-        isNew: Boolean(r.isNew),
-        isGuaranteed50: Boolean(r.isGuaranteed50),
-        isGuaranteed100: Boolean(r.isGuaranteed100),
-        createdAt: new Date().toISOString()
-      });
-    });
-    // 作成したバッチIDを編集対象として保持
-    AppState.currentSession.editingBatchId = batchId;
-  }
-
-  recalculatePullsIndexAndCharge();
-  persistState();
+  syncCurrentSessionToPulls();
   updateAllStats();
   renderHistoryTable();
   renderDirectoryGrid();
   renderConvergenceChart();
+  renderSheetTimelineNav();
 }
 
 // ==========================================================================
 // 統計計算 & 画面更新
 // ==========================================================================
 
-/**
- * シート入力中の内容も加味したリアルタイム集計用 pulls リストを取得
- */
-function getCombinedLivePulls() {
-  const simulated = getSimulatedAllPulls();
-  if (simulated.length > 0) return simulated;
-  return AppState.pulls;
-}
-
 function updateAllStats() {
-  const pulls = getCombinedLivePulls();
+  const pulls = AppState.pulls;
   const totalPulls = pulls.length;
   const pyroxene = totalPulls * 120;
 
@@ -2326,6 +2262,11 @@ function saveSettingsFromTab() {
   recalculatePullsIndexAndCharge();
   persistState();
   updateAllStats();
+  if (AppState.currentSession && AppState.currentSession.editingBatchId) {
+    loadBatchById(AppState.currentSession.editingBatchId);
+  } else {
+    setupInputSheet();
+  }
   switchTab('tabDashboard');
 }
 
@@ -2618,6 +2559,11 @@ function initEventListeners() {
       if (confirm('ガチャ履歴を全て初期化しますか？\n（チャージも0にリセットされます）')) {
         AppState.pulls = [];
         AppState.config.initCharge = 0;
+        AppState.currentSession = {
+          editingBatchId: null,
+          pullCount: 10,
+          rows: []
+        };
         const initChargeInput = document.getElementById('settingsInitChargeInput');
         if (initChargeInput) initChargeInput.value = 0;
 
