@@ -1016,65 +1016,16 @@ body.theme-tactical-dark .schale-table th {
   font-size: 18px;
 }
 
-/* スタイリッシュ作戦記録シート (添付2枚目完全再現・事務的UIを脱却) */
+/* スタイリッシュ作戦記録シート (上部省スペース・直接入力UI) */
 .gacha-sheet-panel {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
   background: var(--bg-card);
   border: 1.5px solid var(--border-strong);
-  border-radius: var(--radius-lg);
-  padding: 16px;
-  box-shadow: var(--shadow-neon);
-}
-
-.sheet-title-banner {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding-bottom: 10px;
-  border-bottom: 1.5px solid var(--border);
-}
-
-.sheet-title-left {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-}
-
-.sheet-title-left h2 {
-  font-size: 17px;
-  font-weight: 800;
-  color: var(--text-main);
-}
-
-.sheet-sub-badge {
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--primary);
-  background: rgba(0, 174, 239, 0.1);
-  padding: 2px 8px;
-  border-radius: 4px;
-}
-
-.sheet-tags-right {
-  display: flex;
-  gap: 6px;
-}
-
-.badge-chip {
-  font-size: 11px;
-  font-weight: 700;
-  padding: 3px 8px;
-  border-radius: 4px;
-  background: rgba(0, 174, 239, 0.08);
-  border: 1px solid var(--border);
-  color: var(--text-muted);
-}
-
-.badge-chip.chip-charge {
-  color: var(--primary);
-  border-color: rgba(0, 174, 239, 0.35);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+  box-shadow: var(--shadow-sm);
 }
 
 /* スプレッドシートテーブル (添付2枚目忠実再現 + 洗練された枠線・入力UI) */
@@ -1102,7 +1053,8 @@ body.theme-tactical-dark .sheet-table-outer {
   background: linear-gradient(180deg, rgba(0, 174, 239, 0.15) 0%, rgba(0, 174, 239, 0.08) 100%);
   color: #00658d;
   font-weight: 800;
-  padding: 9px 8px;
+  padding: 6px 6px;
+  font-size: 12px;
   border-bottom: 2px solid var(--border-strong);
   border-right: 1px solid rgba(0, 174, 239, 0.2);
   white-space: nowrap;
@@ -1118,7 +1070,7 @@ body.theme-tactical-dark .schale-sheet-table th {
 }
 
 .schale-sheet-table td {
-  padding: 5px 8px;
+  padding: 3px 6px;
   border-bottom: 1px solid rgba(0, 174, 239, 0.16);
   border-right: 1px solid rgba(0, 174, 239, 0.14);
   vertical-align: middle;
@@ -1313,48 +1265,92 @@ body.theme-tactical-dark .sheet-student-input.is-pickup {
   box-shadow: 0 2px 6px rgba(245, 158, 11, 0.3);
 }
 
-/* シート操作ボタンバー */
+/* シート操作ボタンバー (キャンセル / 1連に切替 / 確定 / 次へ) */
 .sheet-control-actions {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding-top: 8px;
-  gap: 8px;
+  padding-top: 6px;
+  gap: 5px;
+  flex-wrap: nowrap;
+  width: 100%;
 }
 
-.btn-cyan-outline {
+.sheet-left-btns {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+}
+
+/* キャンセルボタン */
+.btn-sheet-cancel {
   background: transparent;
-  border: 1.5px solid var(--border-glow);
-  color: var(--primary);
-  padding: 8px 16px;
-  font-size: 13px;
+  border: 1.5px solid rgba(239, 68, 68, 0.45);
+  color: #ef4444;
+  padding: 6px 10px;
+  font-size: 11.5px;
   font-weight: 700;
   border-radius: var(--radius-sm);
   cursor: pointer;
   transition: var(--transition);
+  white-space: nowrap;
 }
 
-.btn-cyan-outline:hover {
-  background: rgba(0, 174, 239, 0.1);
+.btn-sheet-cancel:hover {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: #ef4444;
+}
+
+/* 1連・10連切替ボタン */
+.btn-toggle-count {
+  background: rgba(0, 174, 239, 0.08);
+  border: 1.5px solid var(--border-glow);
+  color: var(--primary-dark);
+  padding: 6px 11px;
+  font-size: 11.5px;
+  font-weight: 800;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: var(--transition);
+  white-space: nowrap;
+}
+
+body.theme-tactical-dark .btn-toggle-count {
+  background: rgba(0, 174, 239, 0.15);
+  color: var(--cyan-bright);
+}
+
+.btn-toggle-count:hover {
+  background: rgba(0, 174, 239, 0.2);
   border-color: var(--primary);
+  box-shadow: 0 2px 8px rgba(0, 174, 239, 0.25);
+}
+
+.btn-toggle-count.active-single {
+  background: var(--primary);
+  color: #ffffff;
+  border-color: var(--primary-dark);
+  box-shadow: var(--shadow-neon);
 }
 
 .sheet-right-btns {
   display: flex;
-  gap: 8px;
+  gap: 5px;
+  align-items: center;
 }
 
 .btn-green-submit {
   background: var(--success);
   border: none;
   color: #ffffff;
-  padding: 9px 18px;
-  font-size: 13px;
+  padding: 6px 11px;
+  font-size: 11.5px;
   font-weight: 800;
   border-radius: var(--radius-sm);
   cursor: pointer;
   box-shadow: 0 2px 8px rgba(16, 185, 129, 0.25);
   transition: var(--transition);
+  white-space: nowrap;
 }
 
 .btn-green-submit:hover {
@@ -1367,19 +1363,56 @@ body.theme-tactical-dark .sheet-student-input.is-pickup {
   background: var(--primary);
   border: none;
   color: #ffffff;
-  padding: 9px 18px;
-  font-size: 13px;
+  padding: 6px 11px;
+  font-size: 11.5px;
   font-weight: 800;
   border-radius: var(--radius-sm);
   cursor: pointer;
   box-shadow: var(--shadow-neon);
   transition: var(--transition);
+  white-space: nowrap;
 }
 
 .btn-cyan-next:hover {
   background: var(--primary-dark);
   box-shadow: 0 4px 16px rgba(0, 174, 239, 0.4);
   transform: translateY(-1px);
+}
+
+/* 1連モード時の2〜10連目グレーアウトスタイル */
+.schale-sheet-table tr.row-disabled {
+  opacity: 0.35 !important;
+  background: rgba(241, 245, 249, 0.7) !important;
+  pointer-events: none !important;
+  user-select: none !important;
+}
+
+.schale-sheet-table tr.row-disabled td {
+  color: #94a3b8 !important;
+}
+
+.schale-sheet-table tr.row-disabled .sheet-student-input {
+  background: #e2e8f0 !important;
+  border-color: #cbd5e1 !important;
+  color: transparent !important;
+  cursor: not-allowed !important;
+}
+
+.schale-sheet-table tr.row-disabled .custom-chk-box {
+  background: #e2e8f0 !important;
+  border-color: #cbd5e1 !important;
+  cursor: not-allowed !important;
+}
+
+body.theme-tactical-dark .schale-sheet-table tr.row-disabled {
+  opacity: 0.25 !important;
+  background: rgba(15, 23, 42, 0.7) !important;
+}
+
+body.theme-tactical-dark .schale-sheet-table tr.row-disabled .sheet-student-input,
+body.theme-tactical-dark .schale-sheet-table tr.row-disabled .custom-chk-box {
+  background: #1e293b !important;
+  border-color: #334155 !important;
 }
 
 /* 生徒名サジェストポップアップ (前方一致・平仮名カタカナ) */

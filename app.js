@@ -1,11 +1,14 @@
 /**
  * ブルーアーカイブ リアルタイムガチャ集計 (BA Gacha Live Tracker)
- * Version: v1.0.4
+ * Version: v1.0.7
  * Core Application Logic & State Management
  */
 
-const APP_VERSION = 'v1.0.6';
+const APP_VERSION = 'v1.0.7';
 const REMOTE_STUDENT_ICONS_URL = 'https://raw.githubusercontent.com/roundabout-oxygen/ba_gacha_tabulation/main/data/student_icons.json';
+
+// 単発 (1連) モードかどうかのフラグ (false = 10連モード, true = 1連モード)
+let isSinglePullMode = false;
 
 // アプリケーション全体の状態管理
 const AppState = {
@@ -397,6 +400,13 @@ function switchTab(tabId) {
     renderHistoryTable();
     renderDirectoryGrid();
     renderConvergenceChart();
+  } else if (tabId === 'tabGacha') {
+    // ガチャタブに切り替わった際、シート行が未生成なら自動でセットアップ
+    if (!AppState.currentSession.rows || AppState.currentSession.rows.length === 0) {
+      setupInputSheet();
+    } else {
+      applyPullModeUI();
+    }
   }
 }
 
@@ -424,15 +434,15 @@ function calculateCurrentCharge() {
 // ==========================================================================
 
 /**
- * 入力シートの初期セットアップ
+ * 入力シートの初期セットアップ (常に10行生成し、1連モード時は2〜10連目をグレーアウト)
  */
-function setupInputSheet(pullCount = 10) {
-  AppState.currentSession.pullCount = pullCount;
+function setupInputSheet() {
+  AppState.currentSession.pullCount = isSinglePullMode ? 1 : 10;
   const currentTotal = AppState.pulls.length;
   let runningCharge = calculateCurrentCharge();
 
   const rows = [];
-  for (let i = 0; i < pullCount; i++) {
+  for (let i = 0; i < 10; i++) {
     const seq = i + 1;
     const total = currentTotal + seq;
     runningCharge += 1;
@@ -457,6 +467,66 @@ function setupInputSheet(pullCount = 10) {
 }
 
 /**
+ * 1連モード・10連モードのUI反映
+ * 1連モード時: 2〜10連目がグレーアウトし、1連目のみ入力可能
+ */
+function applyPullModeUI() {
+  const btnToggle = document.getElementById('btnTogglePullCount');
+  const btnNext = document.getElementById('btnSheetSubmitNext');
+  const tbody = document.getElementById('gachaSheetTbody');
+
+  if (btnToggle) {
+    btnToggle.textContent = isSinglePullMode ? '10連に切替' : '1連に切替';
+    if (isSinglePullMode) {
+      btnToggle.classList.add('active-single');
+    } else {
+      btnToggle.classList.remove('active-single');
+    }
+  }
+
+  if (btnNext) {
+    btnNext.textContent = isSinglePullMode ? '次の1連へ ▶' : '次の10連へ ▶';
+  }
+
+  if (!tbody) return;
+
+  const trList = tbody.querySelectorAll('tr');
+  trList.forEach((tr, idx) => {
+    const inputs = tr.querySelectorAll('input');
+    if (idx === 0) {
+      // 1連目: 常に有効
+      tr.classList.remove('row-disabled');
+      inputs.forEach(inp => inp.disabled = false);
+    } else {
+      // 2連〜10連目
+      if (isSinglePullMode) {
+        tr.classList.add('row-disabled');
+        inputs.forEach(inp => inp.disabled = true);
+
+        // 値をリセット
+        if (AppState.currentSession.rows[idx]) {
+          AppState.currentSession.rows[idx].studentName = '';
+          AppState.currentSession.rows[idx].isPick = false;
+          AppState.currentSession.rows[idx].isNew = false;
+        }
+        const textInp = tr.querySelector('.sheet-student-input');
+        if (textInp) {
+          textInp.value = '';
+          textInp.classList.remove('has-value', 'is-pickup');
+        }
+        const chks = tr.querySelectorAll('.col-chk input');
+        chks.forEach(c => c.checked = false);
+        const avatarSlot = tr.querySelector('.sheet-student-avatar-slot');
+        if (avatarSlot) avatarSlot.classList.remove('visible');
+      } else {
+        tr.classList.remove('row-disabled');
+        inputs.forEach(inp => inp.disabled = false);
+      }
+    }
+  });
+}
+
+/**
  * 入力シートテーブルのレンダリング
  */
 function renderInputSheetTable() {
@@ -465,24 +535,6 @@ function renderInputSheetTable() {
 
   tbody.innerHTML = '';
   const rows = AppState.currentSession.rows;
-  const pullCount = AppState.currentSession.pullCount;
-
-  // タイトル & サブタイトルの更新
-  const titleEl = document.getElementById('sheetPullTitle');
-  const subEl = document.getElementById('sheetPullSubtitle');
-  const modeBadge = document.getElementById('sheetModeBadge');
-  const chargeBadge = document.getElementById('sheetCurrentChargeBadge');
-
-  if (titleEl) titleEl.textContent = `${pullCount}連 ガチャ記録シート`;
-  if (subEl && rows.length > 0) {
-    subEl.textContent = `累計 ${rows[0].total} 〜 ${rows[rows.length - 1].total} 連`;
-  }
-  if (modeBadge) {
-    modeBadge.textContent = AppState.config.rate === 0.06 ? '6% フェス' : '3% 通常';
-  }
-  if (chargeBadge && rows.length > 0) {
-    chargeBadge.textContent = `開始チャージ: ${rows[0].charge - 1}`;
-  }
 
   rows.forEach((row, idx) => {
     const tr = document.createElement('tr');
@@ -632,6 +684,9 @@ function renderInputSheetTable() {
 
     tbody.appendChild(tr);
   });
+
+  // 1連モード・10連モードの表示状態（グレーアウト等）を適用
+  applyPullModeUI();
 }
 
 /**
@@ -854,9 +909,10 @@ function commitCurrentSheet() {
   if (!rows || rows.length === 0) return;
 
   const batchId = 'batch_' + Date.now();
-  const pullType = AppState.currentSession.pullCount === 1 ? '1' : '10';
+  const pullType = isSinglePullMode ? '1' : '10';
+  const targetRows = isSinglePullMode ? [rows[0]] : rows;
 
-  rows.forEach(r => {
+  targetRows.forEach(r => {
     const isThreeStar = Boolean(r.studentName && r.studentName.trim());
     AppState.pulls.push({
       id: AppState.pulls.length + 1,
@@ -1364,40 +1420,38 @@ function initEventListeners() {
     });
   });
 
-  // 2. ガチャ実行ボタン（タブ内）
-  const btnPull1 = document.getElementById('btnPull1');
-  const btnPull10 = document.getElementById('btnPull10');
-  if (btnPull1) {
-    btnPull1.addEventListener('click', () => {
-      setupInputSheet(1);
-    });
-  }
-  if (btnPull10) {
-    btnPull10.addEventListener('click', () => {
-      setupInputSheet(10);
-    });
-  }
-
-  // 3. シート確定・ナビゲーションボタン
-  const btnBack = document.getElementById('btnSheetBack');
+  // 2. シート確定・キャンセル・1連/10連切替ボタン
+  const btnCancelSheet = document.getElementById('btnSheetCancel') || document.getElementById('btnSheetBack');
+  const btnToggleCount = document.getElementById('btnTogglePullCount');
   const btnSubmitOk = document.getElementById('btnSheetSubmitOk');
   const btnSubmitNext = document.getElementById('btnSheetSubmitNext');
 
-  if (btnBack) {
-    btnBack.addEventListener('click', () => {
+  if (btnCancelSheet) {
+    btnCancelSheet.addEventListener('click', () => {
+      setupInputSheet();
       switchTab('tabDashboard');
     });
   }
+
+  if (btnToggleCount) {
+    btnToggleCount.addEventListener('click', () => {
+      isSinglePullMode = !isSinglePullMode;
+      applyPullModeUI();
+    });
+  }
+
   if (btnSubmitOk) {
     btnSubmitOk.addEventListener('click', () => {
       commitCurrentSheet();
+      setupInputSheet();
       switchTab('tabDashboard');
     });
   }
+
   if (btnSubmitNext) {
     btnSubmitNext.addEventListener('click', () => {
       commitCurrentSheet();
-      setupInputSheet(10);
+      setupInputSheet();
     });
   }
 

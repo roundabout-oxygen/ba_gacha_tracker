@@ -26,7 +26,7 @@
           <div class="brand-logo-icon">G</div>
           <div class="brand-titles">
             <h1 class="brand-name">シャーレ ガチャ集計</h1>
-            <span class="version-badge" id="appVersionBadge">v1.0.6</span>
+            <span class="version-badge" id="appVersionBadge">v1.0.7</span>
           </div>
         </div>
         <div class="header-right-tools">
@@ -189,32 +189,11 @@
       </section>
 
       <!-- ======================================================================= -->
-      <!-- タブ2: ガチャを引く (1連・10連ボタン ＆ 作戦記録シート) -->
+      <!-- タブ2: ガチャを引く (省スペース作戦記録シート) -->
       <!-- ======================================================================= -->
       <section class="tab-view-content" id="tabGacha">
-        <!-- ガチャ実行ボタンバー (タブ内設置) -->
-        <div class="gacha-trigger-bar">
-          <button id="btnPull1" class="btn-pull-action btn-pull-1">
-            <span class="btn-pull-icon">⚡</span> 1連を引く
-          </button>
-          <button id="btnPull10" class="btn-pull-action btn-pull-10">
-            <span class="btn-pull-icon">✨</span> 10連を引く
-          </button>
-        </div>
-
-        <!-- スタイリッシュ作戦記録シート (添付2枚目完全再現・事務的UIを脱却) -->
+        <!-- スタイリッシュ作戦記録シート (上部ボタン・タイトルを廃止して省スペース化) -->
         <div class="cyan-card gacha-sheet-panel" id="gachaSheetPanel">
-          <div class="sheet-title-banner">
-            <div class="sheet-title-left">
-              <h2 id="sheetPullTitle">10連 ガチャ記録シート</h2>
-              <span class="sheet-sub-badge" id="sheetPullSubtitle">累計 1 〜 10 連</span>
-            </div>
-            <div class="sheet-tags-right">
-              <span class="badge-chip" id="sheetModeBadge">3% 通常</span>
-              <span class="badge-chip chip-charge" id="sheetCurrentChargeBadge">開始チャージ: 0</span>
-            </div>
-          </div>
-
           <!-- スプレッドシートテーブル (白飛びゼロ・美しい水色罫線・枠色で一目でわかる入力欄) -->
           <div class="sheet-table-outer">
             <table class="schale-sheet-table" id="gachaSheetTable">
@@ -234,11 +213,16 @@
             </table>
           </div>
 
-          <!-- シート操作ボタンバー -->
+          <!-- シート操作ボタンバー (キャンセル / 1連に切替 / 確定 / 次へ) -->
           <div class="sheet-control-actions">
-            <button id="btnSheetBack" class="btn-cyan-outline">
-              ← 集計へ
-            </button>
+            <div class="sheet-left-btns">
+              <button id="btnSheetCancel" class="btn-sheet-cancel" title="入力を破棄して集計画面へ戻る">
+                キャンセル
+              </button>
+              <button id="btnTogglePullCount" class="btn-toggle-count" title="1連入力と10連入力を切り替える">
+                1連に切替
+              </button>
+            </div>
             <div class="sheet-right-btns">
               <button id="btnSheetSubmitOk" class="btn-green-submit">
                 ✔ 確定して集計へ
