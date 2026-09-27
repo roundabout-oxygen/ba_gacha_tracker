@@ -1,10 +1,10 @@
 /**
  * ブルーアーカイブ リアルタイムガチャ集計 (BA Gacha Live Tracker)
- * Version: v1.0.18
+ * Version: v1.0.19
  * Core Application Logic & State Management
  */
 
-const APP_VERSION = 'v1.0.18';
+const APP_VERSION = 'v1.0.19';
 const REMOTE_STUDENT_ICONS_URL = 'https://raw.githubusercontent.com/roundabout-oxygen/ba_gacha_tabulation/main/data/student_icons.json';
 
 // 単発 (1連) モードかどうかのフラグ (false = 10連モード, true = 1連モード)
@@ -399,10 +399,19 @@ function switchTab(tabId) {
     renderDirectoryGrid();
     renderConvergenceChart();
   } else if (tabId === 'tabGacha') {
-    if (!AppState.currentSession.rows || AppState.currentSession.rows.length === 0) {
-      setupInputSheet();
+    const batches = getAllBatches();
+    if (batches.length > 0) {
+      if (!AppState.currentSession.editingBatchId || !batches.includes(AppState.currentSession.editingBatchId)) {
+        loadBatchById(batches[batches.length - 1]);
+      } else {
+        applyPullModeUI();
+      }
     } else {
-      applyPullModeUI();
+      if (!AppState.currentSession.rows || AppState.currentSession.rows.length === 0) {
+        setupInputSheet();
+      } else {
+        applyPullModeUI();
+      }
     }
   } else if (tabId === 'tabHistory') {
     renderHistoryTable();
@@ -449,20 +458,27 @@ function getSimulatedAllPulls() {
       }
     });
   } else {
-    // 新規バッチ入力中
+    // editingBatchId がない場合: 確定済みの AppState.pulls のみをクローン
+    // 未確定の空シート行を勝手に末尾に追加してはならない！
     AppState.pulls.forEach(p => pulls.push({ ...p }));
-    // 現在の新規シートの行を追加
-    validCurrentRows.forEach(r => {
-      if (r) {
-        pulls.push({
-          totalPullIndex: r.total,
-          isPick: Boolean(r.isPick),
-          studentName: r.studentName ? normalizeStudentName(r.studentName) : '',
-          isThreeStar: Boolean(r.studentName && r.studentName.trim()),
-          isNew: Boolean(r.isNew)
+
+    // まだ pulls が0件で、かつシートに入力（生徒名またはpick）がある場合のみ反映
+    if (AppState.pulls.length === 0) {
+      const hasInput = validCurrentRows.some(r => r && ((r.studentName && r.studentName.trim()) || r.isPick));
+      if (hasInput) {
+        validCurrentRows.forEach(r => {
+          if (r) {
+            pulls.push({
+              totalPullIndex: r.total,
+              isPick: Boolean(r.isPick),
+              studentName: r.studentName ? normalizeStudentName(r.studentName) : '',
+              isThreeStar: Boolean(r.studentName && r.studentName.trim()),
+              isNew: Boolean(r.isNew)
+            });
+          }
         });
       }
-    });
+    }
   }
 
   // もし引きが一切なければ空配列
@@ -1628,7 +1644,13 @@ function commitCurrentSheet() {
       AppState.pulls.splice(firstIdx, originalCount, ...updatedPulls);
     }
   } else {
-    // 新規バッチ追加
+    // 新規バッチ追加：入力（生徒名またはpick）がある場合のみ正式追加！
+    const hasAnyContent = targetRows.some(r => (r.studentName && r.studentName.trim()) || r.isPick);
+    if (!hasAnyContent) {
+      // 完全な空シートならAppState.pullsにゴミを追加せず終了
+      return;
+    }
+
     const batchId = 'batch_' + Date.now();
     targetRows.forEach(r => {
       const isThreeStar = Boolean(r.studentName && r.studentName.trim());
@@ -1648,10 +1670,9 @@ function commitCurrentSheet() {
         createdAt: new Date().toISOString()
       });
     });
+    // 作成したバッチIDを編集対象として保持
+    AppState.currentSession.editingBatchId = batchId;
   }
-
-  // 編集モードをリセット
-  AppState.currentSession.editingBatchId = null;
 
   recalculatePullsIndexAndCharge();
   persistState();
@@ -2492,7 +2513,6 @@ function initEventListeners() {
   if (btnSubmitOk) {
     btnSubmitOk.addEventListener('click', () => {
       commitCurrentSheet();
-      setupInputSheet();
       switchTab('tabDashboard');
     });
   }
