@@ -459,7 +459,7 @@ body.theme-tactical-dark .nav-tab-btn.active {
   gap: 12px;
   background: #ffffff;
   border: 2.5px solid #00aeef; /* 添付3枚目準拠: 太い水色実線でタブと一体化 */
-  border-radius: 0 10px 10px 10px; /* 左上をタブと結合 */
+  border-radius: 10px; /* 四隅すべて均一に丸める (左上も他の四隅と同じ10px) */
   padding: 12px 14px;
   box-shadow: var(--shadow-sm);
   max-height: calc(100vh - 125px);
