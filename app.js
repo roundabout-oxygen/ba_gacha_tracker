@@ -1,10 +1,10 @@
 /**
  * ブルアカ リアルタイムガチャ集計 (BA Gacha Live Tracker)
- * Version: v1.0.1
+ * Version: v1.0.3
  * Core Application Logic
  */
 
-const APP_VERSION = 'v1.0.1';
+const APP_VERSION = 'v1.0.3';
 
 // アプリケーション全体の状態管理
 const AppState = {
@@ -1833,6 +1833,45 @@ function initUIEventListeners() {
   document.getElementById('btnExitStreamMode').addEventListener('click', () => {
     document.getElementById('streamOverlayLayer').style.display = 'none';
   });
+
+  // テーマ切り替え (タクティカルHUDダーク ⇔ ライト)
+  const btnTheme = document.getElementById('btnToggleTheme');
+  if (btnTheme) {
+    btnTheme.addEventListener('click', () => {
+      const isDark = document.body.classList.contains('theme-tactical-dark');
+      if (isDark) {
+        document.body.classList.remove('theme-tactical-dark');
+        document.body.classList.add('theme-light');
+        localStorage.setItem('ba_theme', 'light');
+      } else {
+        document.body.classList.remove('theme-light');
+        document.body.classList.add('theme-tactical-dark');
+        localStorage.setItem('ba_theme', 'dark');
+      }
+      renderConvergenceChart();
+    });
+
+    const savedTheme = localStorage.getItem('ba_theme');
+    if (savedTheme === 'light') {
+      document.body.classList.remove('theme-tactical-dark');
+      document.body.classList.add('theme-light');
+    }
+  }
+
+  // 小窓ポップアウト機能 (配信用独立ウィンドウ)
+  const btnPopout = document.getElementById('btnPopoutWindow');
+  if (btnPopout) {
+    btnPopout.addEventListener('click', () => {
+      const url = new URL(window.location.href);
+      url.searchParams.set('popout', '1');
+      window.open(url.toString(), 'BA_Gacha_Live_Compact', 'width=520,height=820,menubar=no,toolbar=no,location=no,status=no,resizable=yes');
+    });
+  }
+
+  // 小窓表示フラグがある場合はbodyにwindow-popoutクラスを付与
+  if (new URLSearchParams(window.location.search).get('popout') === '1') {
+    document.body.classList.add('window-popout');
+  }
 
   // 仮登録JSONエクスポート・インポート
   document.getElementById('btnExportCustomJson').addEventListener('click', () => {

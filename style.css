@@ -1,36 +1,44 @@
 /* ==========================================================================
    ブルアカ リアルタイムガチャ集計 (BA Gacha Live Tracker)
-   Version: v1.0.1
-   Style Sheet
+   Version: v1.0.2
+   Stitch Tactical HUD Design System Integration
    ========================================================================== */
 
 :root {
+  /* Stitch Design System: Tactical Gaming HUD */
+  --font-ui: 'Hanken Grotesk', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: 'Space Mono', monospace;
+
+  /* Tactical Color Palette */
+  --cyan-neon: #00f0ff;
+  --cyan-bright: #7df4ff;
+  --cyan-dim: #006970;
+  --gold-tactical: #ffd700;
+  --gold-bg: #fff2cc;
+  --red-tactical: #ff4b4b;
+  --green-tactical: #00e676;
+  
+  /* Tactical Dark (Default) */
+  --bg-hud: #0b0f17;
+  --bg-surface: rgba(18, 25, 36, 0.88);
+  --bg-surface-high: rgba(28, 38, 54, 0.95);
+  --border-hud: rgba(0, 240, 255, 0.22);
+  --border-hud-glow: 0 0 10px rgba(0, 240, 255, 0.25);
+  --text-hud-main: #f1f5f9;
+  --text-hud-muted: #94a3b8;
+  --text-hud-dim: #64748b;
+
+  /* Light Theme Overrides */
   --primary: #00aeef;
   --primary-hover: #0098d4;
   --primary-light: #e6f7fd;
   --secondary: #ff6b8b;
-  --secondary-hover: #fa5276;
   --success: #10b981;
   --warning: #f59e0b;
-  --danger: #ef4444;
-  --gold: #f59e0b;
-  --gold-bg: #fff2cc;
-  --bg-main: #f0f4f8;
-  --bg-card: #ffffff;
-  --text-main: #1e293b;
-  --text-muted: #64748b;
-  --text-white: #ffffff;
-  --border-color: #cbd5e1;
-  --border-dark: #1e293b;
-  --border-sheet: #000000;
-  --header-bg: #1a273b;
   --radius-sm: 4px;
   --radius-md: 8px;
-  --radius-lg: 14px;
-  --shadow-sm: 0 1px 3px rgba(0,0,0,0.1);
-  --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
-  --shadow-lg: 0 10px 25px rgba(0,0,0,0.12);
-  --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
+  --radius-lg: 12px;
+  --shadow-hud: 0 8px 32px rgba(0, 0, 0, 0.4);
 }
 
 * {
@@ -39,14 +47,274 @@
   padding: 0;
 }
 
-body {
-  font-family: var(--font-family);
-  background-color: var(--bg-main);
-  color: var(--text-main);
+/* ==========================================================================
+   Tactical Dark Theme (Stitch Blue Archive HUD)
+   ========================================================================== */
+body.theme-tactical-dark {
+  font-family: var(--font-ui);
+  background-color: var(--bg-hud);
+  color: var(--text-hud-main);
   min-height: 100vh;
   display: flex;
   flex-direction: column;
   overflow-x: hidden;
+  background-image: 
+    linear-gradient(rgba(0, 240, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 240, 255, 0.03) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+body.theme-tactical-dark .app-header {
+  background: rgba(11, 15, 23, 0.92);
+  backdrop-filter: blur(12px);
+  border-bottom: 2px solid var(--cyan-neon);
+  box-shadow: 0 4px 20px rgba(0, 240, 255, 0.15);
+}
+
+body.theme-tactical-dark .brand-title {
+  font-family: var(--font-ui);
+  font-weight: 900;
+  letter-spacing: 1.5px;
+  color: #ffffff;
+  text-shadow: 0 0 10px rgba(0, 240, 255, 0.6);
+}
+
+body.theme-tactical-dark .app-version-badge {
+  font-family: var(--font-mono);
+  background: rgba(0, 240, 255, 0.15);
+  color: var(--cyan-neon);
+  border: 1px solid var(--cyan-neon);
+  box-shadow: 0 0 8px rgba(0, 240, 255, 0.3);
+}
+
+body.theme-tactical-dark .stat-pill {
+  background: rgba(18, 25, 36, 0.8);
+  border: 1px solid var(--border-hud);
+  box-shadow: inset 0 0 8px rgba(0, 240, 255, 0.05);
+}
+
+body.theme-tactical-dark .pill-value {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+body.theme-tactical-dark .card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-hud);
+  box-shadow: var(--shadow-hud);
+  backdrop-filter: blur(8px);
+}
+
+body.theme-tactical-dark .card-title {
+  font-family: var(--font-ui);
+  color: #ffffff;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+}
+
+body.theme-tactical-dark .card-main-val {
+  font-family: var(--font-mono);
+  color: #ffffff;
+  text-shadow: 0 0 12px rgba(255, 255, 255, 0.2);
+}
+
+body.theme-tactical-dark .card-sub-info {
+  color: var(--text-hud-muted);
+}
+
+body.theme-tactical-dark .card-sub-info b {
+  color: var(--cyan-bright);
+  font-family: var(--font-mono);
+}
+
+body.theme-tactical-dark .analysis-item {
+  background: rgba(14, 20, 29, 0.9);
+  border: 1px solid rgba(0, 240, 255, 0.18);
+}
+
+body.theme-tactical-dark .analysis-val {
+  font-family: var(--font-mono);
+  color: #ffffff;
+}
+
+body.theme-tactical-dark .analysis-label,
+body.theme-tactical-dark .analysis-sub {
+  color: var(--text-hud-muted);
+}
+
+body.theme-tactical-dark .welcome-card {
+  background: rgba(18, 25, 36, 0.94);
+  border: 1.5px solid var(--cyan-neon);
+  box-shadow: 0 0 30px rgba(0, 240, 255, 0.25);
+}
+
+body.theme-tactical-dark .setup-form-box {
+  background: transparent;
+}
+
+body.theme-tactical-dark .setup-form-box h3,
+body.theme-tactical-dark .form-label {
+  color: #ffffff;
+}
+
+body.theme-tactical-dark .form-input {
+  background: rgba(10, 14, 22, 0.85);
+  border: 1.5px solid var(--border-hud);
+  color: #ffffff;
+  font-family: var(--font-mono);
+}
+
+body.theme-tactical-dark .form-input:focus {
+  border-color: var(--cyan-neon);
+  box-shadow: 0 0 12px rgba(0, 240, 255, 0.4);
+}
+
+body.theme-tactical-dark .sheet-container {
+  background: rgba(18, 25, 36, 0.94);
+  border: 1.5px solid var(--border-hud);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
+}
+
+body.theme-tactical-dark .sheet-title-group h2 {
+  color: #ffffff;
+}
+
+body.theme-tactical-dark .sheet-guide-note {
+  background: rgba(0, 240, 255, 0.08);
+  border-left: 4px solid var(--cyan-neon);
+  color: #e2e8f0;
+}
+
+body.theme-tactical-dark .gacha-sheet-table {
+  background: #ffffff;
+  border: 2px solid #000000;
+}
+
+body.theme-tactical-dark .gacha-sheet-table th,
+body.theme-tactical-dark .gacha-sheet-table td {
+  border: 1px solid #000000;
+  color: #000000;
+}
+
+body.theme-tactical-dark .sheet-name-input {
+  color: #000000;
+  font-weight: 700;
+}
+
+body.theme-tactical-dark .history-table {
+  color: #e2e8f0;
+}
+
+body.theme-tactical-dark .history-table th {
+  background: rgba(15, 23, 42, 0.95);
+  color: var(--cyan-bright);
+  border-bottom: 2px solid var(--cyan-dim);
+}
+
+body.theme-tactical-dark .history-table td {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+body.theme-tactical-dark .history-table tr:hover {
+  background: rgba(0, 240, 255, 0.06);
+}
+
+body.theme-tactical-dark .history-table td:nth-child(2),
+body.theme-tactical-dark .history-table td:nth-child(3) {
+  font-family: var(--font-mono);
+  font-weight: 700;
+}
+
+body.theme-tactical-dark .btn-sm {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--border-hud);
+  color: #ffffff;
+}
+
+body.theme-tactical-dark .btn-sm:hover {
+  background: rgba(0, 240, 255, 0.2);
+  border-color: var(--cyan-neon);
+}
+
+body.theme-tactical-dark .btn-primary,
+body.theme-tactical-dark .btn-sheet-next,
+body.theme-tactical-dark .btn-pull10,
+body.theme-tactical-dark .btn-primary-large {
+  background: linear-gradient(135deg, #00f0ff, #0284c7);
+  color: #00252b;
+  font-weight: 900;
+  letter-spacing: 0.5px;
+  box-shadow: 0 0 15px rgba(0, 240, 255, 0.4);
+}
+
+body.theme-tactical-dark .btn-primary:hover:not(:disabled),
+body.theme-tactical-dark .btn-sheet-next:hover,
+body.theme-tactical-dark .btn-pull10:hover,
+body.theme-tactical-dark .btn-primary-large:hover {
+  background: linear-gradient(135deg, #7df4ff, #00b4d8);
+  box-shadow: 0 0 22px rgba(0, 240, 255, 0.65);
+}
+
+body.theme-tactical-dark .btn-sheet-secondary {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1.5px solid var(--border-hud);
+  color: #cbd5e1;
+}
+
+body.theme-tactical-dark .btn-sheet-secondary:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: #ffffff;
+}
+
+body.theme-tactical-dark .dashboard-pull-bar {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-hud);
+  color: #ffffff;
+}
+
+body.theme-tactical-dark .pull-bar-desc {
+  color: #ffffff;
+}
+
+body.theme-tactical-dark .modal-content {
+  background: rgba(18, 25, 36, 0.97);
+  border: 2px solid var(--cyan-neon);
+  box-shadow: 0 0 40px rgba(0, 240, 255, 0.35);
+  color: #ffffff;
+}
+
+body.theme-tactical-dark .modal-header {
+  background: rgba(11, 15, 23, 0.95);
+  border-bottom: 1px solid var(--border-hud);
+}
+
+body.theme-tactical-dark .modal-header h3 {
+  color: var(--cyan-bright);
+}
+
+body.theme-tactical-dark .modal-footer {
+  background: rgba(11, 15, 23, 0.95);
+  border-top: 1px solid var(--border-hud);
+}
+
+body.theme-tactical-dark .modal-footer .btn-secondary {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--border-hud);
+  color: #ffffff;
+}
+
+body.theme-tactical-dark .custom-students-table {
+  color: #ffffff;
+}
+
+body.theme-tactical-dark .custom-students-table th {
+  background: rgba(11, 15, 23, 0.9);
+  color: var(--cyan-bright);
+}
+
+body.theme-tactical-dark .custom-students-table td {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 /* ==========================================================================
@@ -118,8 +386,14 @@ body {
   gap: 6px;
   flex-grow: 1;
   justify-content: center;
-  overflow: visible;
+  overflow-x: auto;
   padding: 2px 0;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.stats-live-bar::-webkit-scrollbar {
+  display: none;
 }
 
 .stat-pill {
@@ -1919,7 +2193,7 @@ body {
 }
 
 /* ==========================================================================
-   9. レスポンシブ対応
+   9. レスポンシブ対応 & 小窓（コンパクトウィンドウ）最適化
    ========================================================================== */
 @media (max-width: 900px) {
   .header-container {
@@ -1937,3 +2211,188 @@ body {
     grid-template-columns: repeat(3, 1fr);
   }
 }
+
+/* 小窓・コンパクトウィンドウ（幅400px〜680px または popout時）完全対応 */
+@media (max-width: 680px) {
+  body {
+    overflow-x: hidden;
+  }
+  .main-content {
+    padding: 6px;
+  }
+  .header-container {
+    padding: 4px 6px;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+  .brand-area {
+    gap: 6px;
+  }
+  .brand-title {
+    font-size: 13px;
+    letter-spacing: 0.5px;
+  }
+  .brand-sub {
+    display: none; /* 小窓では不要なサブテキストをカット */
+  }
+  .header-actions {
+    gap: 3px;
+  }
+  .btn-action {
+    font-size: 11px;
+    padding: 4px 7px;
+  }
+  .btn-icon-only {
+    width: 26px;
+    height: 26px;
+    font-size: 12px;
+  }
+  .stats-live-bar {
+    order: 3;
+    width: 100%;
+    gap: 4px;
+    padding: 2px 0;
+    overflow-x: auto;
+  }
+  .stat-pill {
+    padding: 3px 6px;
+    min-width: 75px;
+    flex: 1 1 0;
+  }
+  .pill-label {
+    font-size: 9px;
+  }
+  .pill-value {
+    font-size: 13px;
+  }
+  .pill-sub {
+    font-size: 9px;
+  }
+  .charge-pill {
+    min-width: 90px;
+  }
+
+  /* 10連入力シート (添付2枚目完全再現・横スクロールゼロ) */
+  .sheet-container {
+    padding: 8px 6px;
+    border-radius: var(--radius-md);
+  }
+  .sheet-header-bar {
+    padding-bottom: 6px;
+  }
+  .sheet-title-group h2 {
+    font-size: 14px;
+  }
+  .sheet-table-wrapper {
+    overflow-x: hidden;
+  }
+  .gacha-sheet-table {
+    table-layout: fixed;
+    width: 100%;
+  }
+  .gacha-sheet-table th,
+  .gacha-sheet-table td {
+    padding: 3px 2px;
+    height: 28px;
+    font-size: 12px;
+  }
+  .gacha-sheet-table .col-seq { width: 26px; font-size: 11px; }
+  .gacha-sheet-table .col-total { width: 36px; font-size: 12px; }
+  .gacha-sheet-table .col-charge { width: 44px; font-size: 12px; }
+  .gacha-sheet-table .col-name { width: auto; padding-left: 4px; }
+  .gacha-sheet-table .col-pick { width: 32px; }
+  .gacha-sheet-table .col-new { width: 30px; }
+  .sheet-name-input {
+    height: 24px;
+    font-size: 12px;
+    padding: 1px 4px;
+  }
+  .sheet-checkbox {
+    width: 16px;
+    height: 16px;
+  }
+  .sheet-footer-actions {
+    margin-top: 6px;
+    gap: 6px;
+  }
+  .btn-sheet-secondary {
+    padding: 8px 10px;
+    font-size: 12px;
+  }
+  .btn-sheet-ok {
+    padding: 8px 12px;
+    font-size: 12px;
+  }
+  .btn-sheet-next {
+    padding: 8px 14px;
+    font-size: 12px;
+  }
+
+  /* ダッシュボード (小窓表示) */
+  .dashboard-pull-bar {
+    padding: 6px 10px;
+  }
+  .dashboard-grid-cards {
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+  }
+  .card {
+    padding: 10px;
+    border-radius: var(--radius-md);
+  }
+  .card-head {
+    margin-bottom: 2px;
+  }
+  .card-title {
+    font-size: 11px;
+  }
+  .card-main-val {
+    font-size: 20px;
+    margin-bottom: 2px;
+  }
+  .card-main-val .unit {
+    font-size: 11px;
+  }
+  .card-sub-info {
+    font-size: 10px;
+  }
+  .chart-wrapper {
+    height: 190px;
+  }
+  .analysis-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+  }
+  .analysis-item {
+    padding: 8px;
+  }
+  .analysis-val {
+    font-size: 17px;
+  }
+  .student-avatar-frame {
+    width: 48px;
+    height: 48px;
+  }
+  .student-card-item {
+    width: 56px;
+  }
+  .student-item-name {
+    font-size: 10px;
+  }
+  .history-table-wrapper {
+    max-height: 240px;
+  }
+}
+
+/* ポップアウト小窓専用スタイル (body.window-popout) */
+body.window-popout {
+  font-size: 13px;
+}
+body.window-popout .app-header {
+  position: static;
+}
+body.window-popout .btn-stream,
+body.window-popout #btnPopoutWindow {
+  display: none; /* 小窓自身の中では小窓化ボタンを非表示 */
+}
+
