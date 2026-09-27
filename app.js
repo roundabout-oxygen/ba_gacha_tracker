@@ -1,10 +1,10 @@
 /**
  * ブルーアーカイブ リアルタイムガチャ集計 (BA Gacha Live Tracker)
- * Version: v1.0.14
+ * Version: v1.0.15
  * Core Application Logic & State Management
  */
 
-const APP_VERSION = 'v1.0.14';
+const APP_VERSION = 'v1.0.15';
 const REMOTE_STUDENT_ICONS_URL = 'https://raw.githubusercontent.com/roundabout-oxygen/ba_gacha_tabulation/main/data/student_icons.json';
 
 // 単発 (1連) モードかどうかのフラグ (false = 10連モード, true = 1連モード)
@@ -416,32 +416,94 @@ function switchTab(tabId) {
 // ==========================================================================
 
 /**
- * 直前までのチャージ数を計算
- * ガチャ1回ごとに+1。ピックアップを引いた時点でリセットされ、次から1になる。天井200到達時もリセット。
+ * 全ての引き（確定済み履歴 ＋ 現在編集中または新規のシート内容）を時系列順にシミュレートし、
+ * 正確に再計算された pulls 配列を返す。
+ * これにより、過去のバッチを再編集中に pick を変更した場合でも、
+ * その後の全バッチおよび最終ページの最下段チャージまで即座に正確に反映される。
  */
-function calculateCurrentCharge() {
-  let charge = Number(AppState.config.initCharge) || 0;
-  for (const pull of AppState.pulls) {
-    charge += 1;
-    if (pull.isPick || pull.charge === 200) {
-      charge = 0; // 次の引きで1になる
-    }
+function getSimulatedAllPulls() {
+  const pulls = [];
+  const currentEditingId = AppState.currentSession ? AppState.currentSession.editingBatchId : null;
+  const currentRows = (AppState.currentSession && AppState.currentSession.rows) ? AppState.currentSession.rows : [];
+  const validCurrentRows = isSinglePullMode ? (currentRows[0] ? [currentRows[0]] : []) : currentRows;
+
+  if (currentEditingId) {
+    // 過去のバッチを再編集・閲覧中
+    const batches = getAllBatches();
+    batches.forEach(bId => {
+      if (bId === currentEditingId) {
+        validCurrentRows.forEach(r => {
+          if (r) {
+            pulls.push({
+              totalPullIndex: r.total,
+              isPick: Boolean(r.isPick),
+              studentName: r.studentName ? normalizeStudentName(r.studentName) : '',
+              isThreeStar: Boolean(r.studentName && r.studentName.trim()),
+              isNew: Boolean(r.isNew)
+            });
+          }
+        });
+      } else {
+        const batchItems = AppState.pulls.filter(p => p.batchId === bId);
+        batchItems.forEach(p => pulls.push({ ...p }));
+      }
+    });
+  } else {
+    // 新規バッチ入力中
+    AppState.pulls.forEach(p => pulls.push({ ...p }));
+    // 現在の新規シートの行を追加
+    validCurrentRows.forEach(r => {
+      if (r) {
+        pulls.push({
+          totalPullIndex: r.total,
+          isPick: Boolean(r.isPick),
+          studentName: r.studentName ? normalizeStudentName(r.studentName) : '',
+          isThreeStar: Boolean(r.studentName && r.studentName.trim()),
+          isNew: Boolean(r.isNew)
+        });
+      }
+    });
   }
-  return charge;
+
+  // もし引きが一切なければ空配列
+  if (pulls.length === 0) return [];
+
+  // チャージと連番を時系列順に完全再計算
+  let runningCharge = Number(AppState.config.initCharge) || 0;
+  pulls.forEach((p, idx) => {
+    p.totalPullIndex = idx + 1;
+    runningCharge += 1;
+    p.charge = runningCharge;
+    if (p.isPick || runningCharge === 200) {
+      runningCharge = 0;
+    }
+  });
+
+  return pulls;
 }
 
 /**
- * 現在アクティブなチャージ分子（最新の10連の最終行、または最新引きのチャージ）を取得
+ * 直前までのチャージ数を計算
+ */
+function calculateCurrentCharge() {
+  const simulatedPulls = getSimulatedAllPulls();
+  if (simulatedPulls.length > 0) {
+    return simulatedPulls[simulatedPulls.length - 1].charge;
+  }
+  return Number(AppState.config.initCharge) || 0;
+}
+
+/**
+ * 最終ページの最下段（最新の引きの最終行）におけるチャージ数を取得
+ * ユーザー要望: 「上に表示されているチャージは最終ページの最下段のチャージを表示してください。
+ * 前の10連へで表示を前に戻すと変化しますがそうならないようにお願いします」
  */
 function getActiveDisplayCharge() {
-  if (AppState.currentSession && AppState.currentSession.rows && AppState.currentSession.rows.length > 0) {
-    const targetIdx = isSinglePullMode ? 0 : (AppState.currentSession.rows.length - 1);
-    const targetRow = AppState.currentSession.rows[targetIdx];
-    if (targetRow && targetRow.charge !== undefined) {
-      return targetRow.charge;
-    }
+  const simulatedPulls = getSimulatedAllPulls();
+  if (simulatedPulls.length > 0) {
+    return simulatedPulls[simulatedPulls.length - 1].charge;
   }
-  return calculateCurrentCharge();
+  return Number(AppState.config.initCharge) || 0;
 }
 
 /**
@@ -491,7 +553,7 @@ function recalculateCurrentSessionCharges() {
       if (tdCharge) {
         let label = runningCharge;
         if (runningCharge === 100) label += ' (50%)';
-        else if (runningCharge === 200) label += ' (天井)';
+        else if (runningCharge === 200) label = '200天井';
         tdCharge.textContent = label;
 
         if (runningCharge > 100) {
@@ -514,7 +576,7 @@ function recalculateCurrentSessionCharges() {
     }
   });
 
-  // 上部の集計データ（☆3確率、PU確率、チャージ数等）も即時反映！
+  // 上部の集計データ（☆3確率、PU確率、最終ページ最下段チャージ数等）も即時反映！
   updateAllStats();
 }
 
@@ -934,6 +996,7 @@ function loadBatchById(targetBatchId) {
   AppState.currentSession.rows = rows;
   renderInputSheetTable();
   updateSheetPageIndicator();
+  updateAllStats();
 }
 
 /**
@@ -1138,7 +1201,7 @@ function renderInputSheetTable() {
     tdCharge.className = 'col-charge';
     let chargeLabel = row.charge;
     if (row.charge === 100) chargeLabel += ' (50%)';
-    if (row.charge === 200) chargeLabel += ' (天井)';
+    if (row.charge === 200) chargeLabel = '200天井';
     tdCharge.textContent = chargeLabel;
     tr.appendChild(tdCharge);
 
@@ -1550,53 +1613,8 @@ function commitCurrentSheet() {
  * シート入力中の内容も加味したリアルタイム集計用 pulls リストを取得
  */
 function getCombinedLivePulls() {
-  if (AppState.currentSession && AppState.currentSession.rows && AppState.currentSession.rows.length > 0) {
-    const editingBatchId = AppState.currentSession.editingBatchId;
-    const rows = AppState.currentSession.rows;
-    const targetRows = isSinglePullMode ? [rows[0]] : rows;
-
-    if (editingBatchId) {
-      const list = [];
-      AppState.pulls.forEach(p => {
-        if (p.batchId !== editingBatchId) {
-          list.push(p);
-        }
-      });
-      targetRows.forEach(r => {
-        const isThreeStar = Boolean(r.studentName && r.studentName.trim());
-        list.push({
-          totalPullIndex: r.total,
-          charge: r.charge,
-          studentName: r.studentName ? normalizeStudentName(r.studentName) : '',
-          isThreeStar: isThreeStar,
-          isPick: Boolean(r.isPick),
-          isNew: Boolean(r.isNew),
-          isGuaranteed50: Boolean(r.isGuaranteed50),
-          isGuaranteed100: Boolean(r.isGuaranteed100)
-        });
-      });
-      return list;
-    } else {
-      const hasAnyInput = targetRows.some(r => (r.studentName && r.studentName.trim()) || r.isPick);
-      if (hasAnyInput) {
-        const list = [...AppState.pulls];
-        targetRows.forEach(r => {
-          const isThreeStar = Boolean(r.studentName && r.studentName.trim());
-          list.push({
-            totalPullIndex: r.total,
-            charge: r.charge,
-            studentName: r.studentName ? normalizeStudentName(r.studentName) : '',
-            isThreeStar: isThreeStar,
-            isPick: Boolean(r.isPick),
-            isNew: Boolean(r.isNew),
-            isGuaranteed50: Boolean(r.isGuaranteed50),
-            isGuaranteed100: Boolean(r.isGuaranteed100)
-          });
-        });
-        return list;
-      }
-    }
-  }
+  const simulated = getSimulatedAllPulls();
+  if (simulated.length > 0) return simulated;
   return AppState.pulls;
 }
 
@@ -2154,7 +2172,7 @@ function renderHistoryTable() {
     const tdCharge = document.createElement('td');
     tdCharge.textContent = p.charge;
     if (p.charge === 100) tdCharge.textContent += ' (50%)';
-    if (p.charge === 200) tdCharge.textContent += ' (天井)';
+    if (p.charge === 200) tdCharge.textContent = '200天井';
     tr.appendChild(tdCharge);
 
     const tdName = document.createElement('td');
