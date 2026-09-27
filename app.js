@@ -1,10 +1,10 @@
 /**
  * ブルーアーカイブ リアルタイムガチャ集計 (BA Gacha Live Tracker)
- * Version: v1.0.16
+ * Version: v1.0.17
  * Core Application Logic & State Management
  */
 
-const APP_VERSION = 'v1.0.16';
+const APP_VERSION = 'v1.0.17';
 const REMOTE_STUDENT_ICONS_URL = 'https://raw.githubusercontent.com/roundabout-oxygen/ba_gacha_tabulation/main/data/student_icons.json';
 
 // 単発 (1連) モードかどうかのフラグ (false = 10連モード, true = 1連モード)
@@ -648,6 +648,33 @@ function setupInputSheet() {
 
 
 /**
+ * バッチインデックス (0, 1, 2... targetIdx) へ直接ジャンプする処理
+ * 青いレールをクリックした際や、目盛りクリック時に直接該当ページへ移動
+ */
+function jumpToBatchByIndex(targetIdx) {
+  // 現在シートに入力があれば自動保存
+  const rows = AppState.currentSession.rows || [];
+  const hasInput = rows.some(r => (r.studentName && r.studentName.trim()) || r.isPick);
+  if (AppState.currentSession.editingBatchId || hasInput) {
+    commitCurrentSheet();
+  }
+
+  const batches = getAllBatches();
+  if (batches.length === 0) return;
+
+  const currentEditingId = AppState.currentSession.editingBatchId;
+  const currentIdx = currentEditingId ? batches.indexOf(currentEditingId) : (batches.length - 1);
+  const clampedIdx = Math.max(0, Math.min(batches.length - 1, targetIdx));
+
+  const targetBatchId = batches[clampedIdx];
+  if (targetBatchId) {
+    loadBatchById(targetBatchId);
+    triggerSheetSlideAnimation(clampedIdx >= currentIdx ? 'right' : 'left');
+    renderSheetTimelineNav();
+  }
+}
+
+/**
  * 指定した連番 (targetPullNumber) を含むバッチへジャンプする処理
  */
 function jumpToPullBatch(targetPullNumber) {
@@ -674,9 +701,13 @@ function jumpToPullBatch(targetPullNumber) {
     }
   }
 
-  // もしターゲットが pulls の最大連数以上なら新規入力（最新シート）へ
+  // もしターゲットが pulls の最大連数以上なら最新バッチへ
   if (targetPullNumber > AppState.pulls.length || batches.length === 0) {
-    setupInputSheet();
+    if (batches.length > 0) {
+      loadBatchById(batches[batches.length - 1]);
+    } else {
+      setupInputSheet();
+    }
     triggerSheetSlideAnimation('right');
     renderSheetTimelineNav();
     return;
@@ -806,27 +837,29 @@ function renderSheetTimelineNav() {
 
       tick.addEventListener('click', (e) => {
         e.stopPropagation();
-        jumpToPullBatch(pullNum);
+        jumpToBatchByIndex(step - 1);
       });
 
       ticksLayer.appendChild(tick);
     }
   }
 
-  // トラック全体のクリックでも最寄りのバッチへジャンプ可能に
-  if (trackWrap && !trackWrap.dataset.hasListener) {
-    trackWrap.dataset.hasListener = 'true';
-    trackWrap.addEventListener('click', (e) => {
-      // 目盛りやドット自体のクリックでなければ位置を計算
-      if (e.target.classList.contains('timeline-tick') || e.target.classList.contains('timeline-star-dot')) {
+  // トラック全体（青いレール部分や区間余白）のクリックでも該当の10連へジャンプ
+  if (trackWrap) {
+    trackWrap.onclick = (e) => {
+      if (e.target.classList.contains('timeline-star-dot')) {
         return;
       }
       const rect = trackWrap.getBoundingClientRect();
       const clickX = e.clientX - rect.left;
-      const ratio = Math.max(0, Math.min(1, clickX / rect.width));
-      const targetPull = Math.round(ratio * timelineMaxLimit);
-      jumpToPullBatch(targetPull);
-    });
+      const ratio = Math.max(0, Math.min(0.999, clickX / rect.width));
+
+      const batches = getAllBatches();
+      if (batches.length > 0) {
+        const targetIdx = Math.floor(ratio * batches.length);
+        jumpToBatchByIndex(targetIdx);
+      }
+    };
   }
 
   // 5. 下側の☆３出現位置ドット (〇印) を描画
@@ -999,6 +1032,68 @@ function loadPreviousBatch() {
     return true;
   }
   return false;
+}
+
+/**
+ * 「10連追加」: 押した時点で即座に10連（または1連）引いた状態（履歴確定・累計加算）にする
+ * ユーザー要望: 「真ん中の画面では40連まで表示されているのに上の集計では累計30連になっている。
+ * 10連追加を押した時点で10連引いた状態にしてください」
+ */
+function addNewBatchImmediately() {
+  // 現在シートに入力中の内容があればまずコミット保存
+  const rows = AppState.currentSession.rows || [];
+  const hasInput = rows.some(r => (r.studentName && r.studentName.trim()) || r.isPick);
+  if (AppState.currentSession.editingBatchId || hasInput) {
+    commitCurrentSheet();
+  }
+
+  const count = isSinglePullMode ? 1 : 10;
+  const pullType = isSinglePullMode ? '1' : '10';
+  const batchId = 'batch_' + Date.now();
+  const currentTotal = AppState.pulls.length;
+  let runningCharge = calculateCurrentCharge();
+
+  for (let i = 0; i < count; i++) {
+    const seq = i + 1;
+    const total = currentTotal + seq;
+    runningCharge += 1;
+    const chargeVal = runningCharge;
+    const isGuaranteed50 = (chargeVal === 100);
+    const isGuaranteed100 = (chargeVal === 200);
+
+    AppState.pulls.push({
+      id: total,
+      pullType: pullType,
+      batchId: batchId,
+      seqInBatch: seq,
+      totalPullIndex: total,
+      charge: chargeVal,
+      studentName: '',
+      isThreeStar: false,
+      isPick: false,
+      isNew: false,
+      isGuaranteed50: isGuaranteed50,
+      isGuaranteed100: isGuaranteed100,
+      createdAt: new Date().toISOString()
+    });
+
+    if (chargeVal === 200) {
+      runningCharge = 0;
+    }
+  }
+
+  // 整合性再計算＆永続化
+  recalculatePullsIndexAndCharge();
+  persistState();
+
+  // 作成した最新のバッチをシートに読み込んで表示
+  loadBatchById(batchId);
+  triggerSheetSlideAnimation('right');
+  updateAllStats();
+  renderHistoryTable();
+  renderDirectoryGrid();
+  renderConvergenceChart();
+  renderSheetTimelineNav();
 }
 
 /**
@@ -2373,13 +2468,10 @@ function initEventListeners() {
     });
   }
 
-  // ＋ 10連追加（新規の10連枠を追加）
+  // ＋ 10連追加（押した時点で即座に10連引いた状態にする）
   if (btnAddNextBatch) {
     btnAddNextBatch.addEventListener('click', () => {
-      commitCurrentSheet();
-      setupInputSheet();
-      triggerSheetSlideAnimation('right');
-      updateSheetPageIndicator();
+      addNewBatchImmediately();
     });
   }
 
@@ -2876,8 +2968,10 @@ if (typeof window !== 'undefined') {
   window.recalculateCurrentSessionCharges = recalculateCurrentSessionCharges;
   window.loadPreviousBatch = loadPreviousBatch;
   window.commitCurrentSheet = commitCurrentSheet;
+  window.addNewBatchImmediately = addNewBatchImmediately;
   window.updateSheetPageIndicator = updateSheetPageIndicator;
   window.renderSheetTimelineNav = renderSheetTimelineNav;
   window.jumpToPullBatch = jumpToPullBatch;
+  window.jumpToBatchByIndex = jumpToBatchByIndex;
   window.triggerSheetSlideAnimation = triggerSheetSlideAnimation;
 }

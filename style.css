@@ -1295,13 +1295,21 @@ body.theme-tactical-dark .schale-table th {
   box-shadow: var(--shadow-sm);
 }
 
-/* スプレッドシートテーブル (添付2枚目忠実再現 + 洗練された枠線・入力UI) */
 .sheet-table-outer {
-  overflow-x: auto;
+  overflow: hidden !important;
+  overflow-x: hidden !important;
   border-radius: var(--radius-md);
   border: 1.5px solid var(--border-strong);
   box-shadow: 0 2px 10px rgba(0, 174, 239, 0.04);
   background: #ffffff;
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+
+.sheet-table-outer::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
 }
 
 body.theme-tactical-dark .sheet-table-outer {
@@ -1638,6 +1646,7 @@ body.theme-tactical-dark .sheet-page-indicator-badge {
   background: linear-gradient(90deg, #00adef, #6366f1);
   border-radius: 2px;
   box-shadow: 0 1px 3px rgba(0, 174, 239, 0.3);
+  pointer-events: none;
 }
 
 /* レール両端のキャップ縦棒 */
