@@ -1,10 +1,10 @@
 /**
  * ブルーアーカイブ リアルタイムガチャ集計 (BA Gacha Live Tracker)
- * Version: v1.0.8
+ * Version: v1.0.10
  * Core Application Logic & State Management
  */
 
-const APP_VERSION = 'v1.0.9';
+const APP_VERSION = 'v1.0.10';
 const REMOTE_STUDENT_ICONS_URL = 'https://raw.githubusercontent.com/roundabout-oxygen/ba_gacha_tabulation/main/data/student_icons.json';
 
 // 単発 (1連) モードかどうかのフラグ (false = 10連モード, true = 1連モード)
@@ -1239,36 +1239,189 @@ function setText(id, text) {
 }
 
 // ==========================================================================
-// Chart.js 確率収束グラフ
+// Chart.js 確率収束 ＆ 相対誤差マトリクスグラフ (ba_gacha_tabulation 準拠)
 // ==========================================================================
+
+const convergenceAvatarCache = {};
+
+const convergenceRelativeMatrixPlugin = {
+  id: 'convergenceRelativeMatrixPlugin',
+  beforeDatasetsDraw(chart) {
+    try {
+      const { ctx, chartArea: { left, right, top, bottom } } = chart;
+      if (!chart.scales || !chart.scales.y || !chart.scales.x) return;
+
+      const isDark = document.body.classList.contains('theme-tactical-dark');
+
+      // 最下段 (-100%) のすり抜け生徒用背景帯（ba_gacha_tabulation準拠）
+      const yMinus100 = chart.scales.y.getPixelForValue(-100);
+      if (yMinus100 >= top && yMinus100 <= bottom + 25) {
+        const boxHeight = 34;
+        const boxTop = yMinus100 - boxHeight / 2;
+
+        ctx.save();
+        ctx.fillStyle = isDark ? 'rgba(22, 36, 54, 0.65)' : 'rgba(228, 236, 246, 0.55)';
+        ctx.fillRect(left, boxTop, right - left, boxHeight);
+
+        ctx.strokeStyle = isDark ? 'rgba(0, 174, 239, 0.25)' : 'rgba(0, 174, 239, 0.18)';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(left, boxTop, right - left, boxHeight);
+        ctx.restore();
+      }
+    } catch (e) {
+      console.error('Error in beforeDatasetsDraw:', e);
+    }
+  },
+
+  afterDatasetsDraw(chart) {
+    try {
+      const { ctx, chartArea: { left, right, top, bottom } } = chart;
+      if (!chart.scales || !chart.scales.y || !chart.scales.x) return;
+
+      const threeStarPulls = AppState.pulls.filter(p => p.isThreeStar);
+      if (threeStarPulls.length === 0) return;
+
+      // X座標が近い場合のオフセット計算（カスケード表示）
+      const placedPositions = [];
+
+      threeStarPulls.forEach((pull) => {
+        const pullTotal = pull.totalPullIndex;
+        let baseX = chart.scales.x.getPixelForValue(pullTotal);
+        if (baseX < left || baseX > right) return;
+
+        const isPick = Boolean(pull.isPick);
+        // 相対誤差0%の上方にピックアップ(Y=35%)、最下段にピックアップ以外(Y=-100%)
+        const targetYVal = isPick ? 35 : -100;
+        const centerY = chart.scales.y.getPixelForValue(targetYVal);
+
+        // 重なり検出とカスケードずらし (ba_gacha_tabulation再現)
+        let finalX = baseX;
+        const overlapGroup = placedPositions.filter(p => 
+          p.isPick === isPick && Math.abs(p.x - baseX) < 24
+        );
+        if (overlapGroup.length > 0) {
+          finalX = baseX + overlapGroup.length * 16;
+          if (finalX > right - 15) finalX = right - 15;
+        }
+        placedPositions.push({ x: finalX, isPick: isPick });
+
+        const iconUrl = getStudentIconUrl(pull.studentName);
+        if (!iconUrl) return;
+
+        let img = convergenceAvatarCache[iconUrl];
+        if (!img) {
+          img = new Image();
+          img.onload = () => chart.draw();
+          img.src = iconUrl;
+          convergenceAvatarCache[iconUrl] = img;
+        }
+
+        if (img.complete && img.naturalWidth !== 0) {
+          const size = 28;
+          const r = size / 2;
+          const imgX = finalX - r;
+          const imgY = centerY - r;
+
+          ctx.save();
+          // 円形クリップ
+          ctx.beginPath();
+          ctx.arc(finalX, centerY, r, 0, Math.PI * 2);
+          ctx.closePath();
+          ctx.clip();
+          ctx.drawImage(img, imgX, imgY, size, size);
+          ctx.restore();
+
+          // 金色丸枠ボーダー (ba_gacha_tabulation忠実再現)
+          ctx.save();
+          ctx.strokeStyle = '#c5a059';
+          ctx.lineWidth = 2.5;
+          ctx.shadowColor = 'rgba(0, 0, 0, 0.25)';
+          ctx.shadowBlur = 4;
+          ctx.shadowOffsetY = 1.5;
+          ctx.beginPath();
+          ctx.arc(finalX, centerY, r, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.restore();
+        }
+      });
+    } catch (e) {
+      console.error('Error in afterDatasetsDraw:', e);
+    }
+  }
+};
 
 function renderConvergenceChart() {
   const canvas = document.getElementById('gachaConvergenceChart');
   if (!canvas) return;
 
   const pulls = AppState.pulls;
-  const labels = [];
-  const actualRates = [];
-  const targetRates = [];
+  const targetRate = AppState.config.rate || 0.03;
+  const isFest = (targetRate === 0.06);
+  const lineColor = isFest ? '#ff3e6c' : '#00aeef';
+  const totalPulls = pulls.length;
 
-  const targetRateVal = (AppState.config.rate || 0.03) * 100;
+  // 凡例表示の同期
+  const rateLabelEl = document.getElementById('chartRateLabel');
+  if (rateLabelEl) rateLabelEl.textContent = isFest ? '6% 乖離率' : '3% 乖離率';
+  const rateDotEl = document.getElementById('chartRateDot');
+  if (rateDotEl) rateDotEl.style.backgroundColor = lineColor;
+
+  // X軸の最大値 (多くても400連程度を想定)
+  let maxPulls = 100;
+  if (totalPulls > 300) {
+    maxPulls = Math.min(400, Math.ceil(totalPulls / 50) * 50);
+  } else if (totalPulls > 200) {
+    maxPulls = 300;
+  } else if (totalPulls > 100) {
+    maxPulls = 200;
+  } else {
+    maxPulls = 100;
+  }
+  if (totalPulls > 400) {
+    maxPulls = Math.ceil(totalPulls / 50) * 50;
+  }
+
+  // データポイント構築
+  const points = [];
+  const actualRatesMap = {};
+
+  // 0連目は実測0%なので偏差 -100% からスタート
+  points.push({ x: 0, y: -100 });
+  actualRatesMap[0] = 0;
+
   let threeCount = 0;
-
-  // 10連刻みまたは全体の推移をプロット
   pulls.forEach((p, idx) => {
     if (p.isThreeStar) threeCount++;
-    if ((idx + 1) % 10 === 0 || idx === pulls.length - 1) {
-      labels.push(`${idx + 1}連`);
-      actualRates.push(((threeCount / (idx + 1)) * 100).toFixed(2));
-      targetRates.push(targetRateVal);
+    const currentN = idx + 1;
+    if (currentN % 10 === 0 || currentN === totalPulls || p.isThreeStar) {
+      const actRate = (threeCount / currentN);
+      const dev = ((actRate - targetRate) / targetRate) * 100;
+      points.push({ x: currentN, y: Number(dev.toFixed(2)) });
+      actualRatesMap[currentN] = Number((actRate * 100).toFixed(2));
     }
   });
 
-  if (labels.length === 0) {
-    labels.push('0連');
-    actualRates.push(targetRateVal);
-    targetRates.push(targetRateVal);
-  }
+  // 重複 x の除去
+  const uniquePoints = [];
+  const seenX = new Set();
+  points.forEach(pt => {
+    if (!seenX.has(pt.x)) {
+      seenX.add(pt.x);
+      uniquePoints.push(pt);
+    }
+  });
+
+  // 理論値基準線 (0%)
+  const baselinePoints = [
+    { x: 0, y: 0 },
+    { x: maxPulls, y: 0 }
+  ];
+
+  // Y軸の最大値計算（きれいな50刻み丸め）
+  const deviations = uniquePoints.map(p => p.y);
+  const maxDev = deviations.length > 0 ? Math.max(...deviations) : 0;
+  const absMax = Math.max(60, Math.ceil(maxDev * 1.15));
+  const yMaxRounded = Math.ceil(absMax / 50) * 50;
 
   if (AppState.chartInstance) {
     AppState.chartInstance.destroy();
@@ -1276,64 +1429,96 @@ function renderConvergenceChart() {
 
   const isDark = document.body.classList.contains('theme-tactical-dark');
   const textColor = isDark ? '#94a3b8' : '#5e6b77';
-  const gridColor = isDark ? 'rgba(0, 174, 239, 0.15)' : 'rgba(0, 174, 239, 0.1)';
+  const gridColor = isDark ? 'rgba(0, 174, 239, 0.12)' : 'rgba(0, 174, 239, 0.08)';
 
   AppState.chartInstance = new Chart(canvas, {
     type: 'line',
     data: {
-      labels: labels,
       datasets: [
         {
-          label: '実測☆3確率',
-          data: actualRates,
-          borderColor: '#00aeef',
-          backgroundColor: 'rgba(0, 174, 239, 0.12)',
-          borderWidth: 2.5,
-          tension: 0.25,
-          fill: true,
-          pointRadius: 3,
-          pointBackgroundColor: '#00aeef'
-        },
-        {
-          label: '公表値',
-          data: targetRates,
-          borderColor: '#ff3e6c',
-          borderWidth: 2,
+          label: '理論値基準線 (0%)',
+          data: baselinePoints,
+          borderColor: isDark ? 'rgba(255, 255, 255, 0.35)' : 'rgba(31, 41, 55, 0.35)',
           borderDash: [5, 5],
+          borderWidth: 1.5,
           pointRadius: 0,
           fill: false
+        },
+        {
+          label: isFest ? '6% 乖離率' : '3% 乖離率',
+          data: uniquePoints,
+          borderColor: lineColor,
+          backgroundColor: isFest ? 'rgba(255, 62, 108, 0.06)' : 'rgba(0, 174, 239, 0.06)',
+          borderWidth: 2.5,
+          tension: 0.15,
+          fill: false,
+          pointRadius: 0,
+          pointHoverRadius: 4,
+          pointHitRadius: 8,
+          pointBackgroundColor: lineColor
         }
       ]
     },
+    plugins: [convergenceRelativeMatrixPlugin],
     options: {
       responsive: true,
       maintainAspectRatio: false,
       interaction: {
         intersect: false,
-        mode: 'index'
+        mode: 'nearest',
+        axis: 'x'
       },
       plugins: {
         legend: { display: false },
         tooltip: {
+          mode: 'nearest',
+          intersect: false,
           callbacks: {
-            label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y}%`
+            title: (items) => `${items[0].parsed.x}連目`,
+            label: (ctx) => {
+              if (ctx.dataset.label.includes('基準線')) return null;
+              const xVal = ctx.parsed.x;
+              const yVal = ctx.parsed.y;
+              const sign = yVal >= 0 ? '+' : '';
+              const act = actualRatesMap[xVal] !== undefined ? actualRatesMap[xVal] : null;
+              const rateLabel = isFest ? '6% フェス' : '3% 通常';
+              if (act !== null) {
+                return `${rateLabel}: 実測 ${act.toFixed(2)}% (偏差: ${sign}${yVal.toFixed(1)}%)`;
+              }
+              return `${rateLabel}: ${sign}${yVal.toFixed(1)}%`;
+            }
           }
         }
       },
       scales: {
         x: {
-          ticks: { color: textColor, font: { size: 10 } },
+          type: 'linear',
+          min: 0,
+          max: maxPulls,
+          ticks: {
+            stepSize: maxPulls <= 100 ? 20 : 50,
+            color: textColor,
+            font: { size: 10 },
+            callback: (val) => `${val}連`
+          },
           grid: { color: gridColor }
         },
         y: {
-          suggestedMin: 0,
-          suggestedMax: 8,
+          min: -120,
+          max: yMaxRounded,
           ticks: {
+            stepSize: 50,
             color: textColor,
             font: { size: 10 },
-            callback: (val) => `${val}%`
+            callback: (val) => (val % 50 === 0 ? `${val}%` : '')
           },
-          grid: { color: gridColor }
+          grid: { color: gridColor },
+          title: {
+            display: true,
+            text: '理論値からの相対誤差 (%)',
+            color: textColor,
+            font: { size: 10 }
+          }
         }
       }
     }

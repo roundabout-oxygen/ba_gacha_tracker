@@ -716,12 +716,12 @@ body.theme-tactical-dark .three-star-item-card.border-exchange .ts-card-type-tex
 }
 
 .chart-legend-dot.dot-target {
-  background-color: var(--secondary);
+  background-color: #64748b;
 }
 
 .chart-canvas-box {
   width: 100%;
-  height: 180px;
+  height: 210px;
   position: relative;
 }
 

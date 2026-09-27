@@ -26,7 +26,7 @@
           <div class="brand-logo-icon">G</div>
           <div class="brand-titles">
             <h1 class="brand-name">シャーレ ガチャ集計</h1>
-            <span class="version-badge" id="appVersionBadge">v1.0.9</span>
+            <span class="version-badge" id="appVersionBadge">v1.0.10</span>
           </div>
         </div>
         <div class="header-right-tools">
@@ -118,13 +118,13 @@
           </div>
         </div>
 
-        <!-- 確率収束グラフ (Chart.js) -->
+        <!-- 確率収束グラフ (Chart.js: 相対誤差マトリクス ＆ 生徒配置) -->
         <div class="cyan-card chart-container-card">
           <div class="chart-header-row">
-            <span class="card-head-title">★3 確率収束グラフ</span>
+            <span class="card-head-title">★3 確率収束 & 相対誤差グラフ</span>
             <div class="chart-legend-wrap">
-              <span class="chart-legend-dot dot-actual"></span> 実測☆3
-              <span class="chart-legend-dot dot-target"></span> 公表値 (<span id="chartTargetPercent">3.0</span>%)
+              <span class="chart-legend-dot dot-target"></span> 基準線 (0%)
+              <span class="chart-legend-dot dot-actual" id="chartRateDot"></span> <span id="chartRateLabel">3% 乖離率</span>
             </div>
           </div>
           <div class="chart-canvas-box">
