@@ -161,7 +161,23 @@
             </table>
           </div>
 
-          <!-- シート操作ボタンバー (2行構成: 1行目=前の10連/1連切替/次の10連, 2行目=この10連削除/確定) -->
+          <!-- 視覚的タイムライン＆ページナビゲーター (添付画像準拠: 節目クリックでジャンプ・☆3出現位置ドット表示) -->
+          <div class="sheet-timeline-nav" id="sheetTimelineNav">
+            <div class="timeline-header-row">
+              <span class="timeline-bound-txt" id="timelineMinBound">0</span>
+              <span class="sheet-page-indicator-badge" id="sheetPageIndicator">1 / 1 ページ</span>
+              <span class="timeline-bound-txt" id="timelineMaxBound">10連</span>
+            </div>
+            <div class="timeline-track-wrap" id="timelineTrackWrap" title="オレンジの区切りをクリックしてその10連へジャンプ">
+              <div class="timeline-rail"></div>
+              <div class="timeline-active-range" id="timelineActiveRange"></div>
+              <div class="timeline-current-pin" id="timelineCurrentPin"></div>
+              <div class="timeline-ticks-layer" id="timelineTicksLayer"></div>
+              <div class="timeline-stars-layer" id="timelineStarsLayer"></div>
+            </div>
+          </div>
+
+          <!-- シート操作ボタンバー (2行構成: 1行目=前の10連/1連切替/次の10連, 2行目=この10連削除/10連追加/確定) -->
           <div class="sheet-control-actions-2rows">
             <!-- 1行目: ◁ 前の10連へ | 1連に切替 | 次の10連へ ▶ -->
             <div class="sheet-action-row-top">
@@ -171,15 +187,18 @@
               <button id="btnTogglePullCount" class="btn-toggle-count" title="1連入力と10連入力を切り替える">
                 1連に切替
               </button>
-              <button id="btnSheetSubmitNext" class="btn-cyan-next btn-action-next" title="入力を確定して次の10連へ進む">
+              <button id="btnSheetSubmitNext" class="btn-cyan-next btn-action-next" title="次の10連へ移動する">
                 次の10連へ ▶
               </button>
             </div>
 
-            <!-- 2行目: この10連を削除 | ✔ 確定して集計へ -->
+            <!-- 2行目: この10連を削除 | 10連追加 | ✔ 確定して集計へ -->
             <div class="sheet-action-row-bottom">
               <button id="btnDeleteCurrentPull" class="btn-danger-outline btn-action-delete" title="現在表示されている10連を履歴から削除して前の10連に戻る">
                 この10連を削除
+              </button>
+              <button id="btnAddNextBatch" class="btn-cyan-outline btn-action-add" title="新しい10連を追加する">
+                10連追加
               </button>
               <button id="btnSheetSubmitOk" class="btn-green-submit btn-action-submit" title="入力を確定して集計画面へ進む">
                 ✔ 確定して集計へ
@@ -236,7 +255,7 @@
           <!-- 設定ヘッダー (タイトル & バージョン表記) -->
           <div class="settings-panel-header">
             <span class="card-head-title">⚙️ 設定</span>
-            <span class="version-badge" id="appVersionBadge">v1.0.12</span>
+            <span class="version-badge" id="appVersionBadge">v1.0.14</span>
           </div>
 
           <div class="settings-panel-body">

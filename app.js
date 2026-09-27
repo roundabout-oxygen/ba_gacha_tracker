@@ -1,10 +1,10 @@
 /**
  * ブルーアーカイブ リアルタイムガチャ集計 (BA Gacha Live Tracker)
- * Version: v1.0.12
+ * Version: v1.0.14
  * Core Application Logic & State Management
  */
 
-const APP_VERSION = 'v1.0.12';
+const APP_VERSION = 'v1.0.14';
 const REMOTE_STUDENT_ICONS_URL = 'https://raw.githubusercontent.com/roundabout-oxygen/ba_gacha_tabulation/main/data/student_icons.json';
 
 // 単発 (1連) モードかどうかのフラグ (false = 10連モード, true = 1連モード)
@@ -575,6 +575,303 @@ function setupInputSheet() {
   AppState.currentSession.rows = rows;
   renderInputSheetTable();
   updateAllStats();
+  updateSheetPageIndicator();
+}
+
+/**
+ * =========================================================================
+ * 視覚的タイムライン＆ページナビゲーター (添付画像準拠: 節目クリックでジャンプ・☆3ドット表示)
+ * =========================================================================
+ */
+let timelineTooltipEl = null;
+
+function showTimelineTooltip(e, text) {
+  if (!timelineTooltipEl) {
+    timelineTooltipEl = document.createElement('div');
+    timelineTooltipEl.className = 'timeline-tooltip';
+    document.body.appendChild(timelineTooltipEl);
+  }
+  timelineTooltipEl.textContent = text;
+  timelineTooltipEl.style.display = 'block';
+  const rect = e.target.getBoundingClientRect();
+  timelineTooltipEl.style.left = `${rect.left + rect.width / 2}px`;
+  timelineTooltipEl.style.top = `${rect.top}px`;
+}
+
+function hideTimelineTooltip() {
+  if (timelineTooltipEl) {
+    timelineTooltipEl.style.display = 'none';
+  }
+}
+
+/**
+ * 指定した連番 (targetPullNumber) を含むバッチへジャンプする処理
+ */
+function jumpToPullBatch(targetPullNumber) {
+  // 現在シートに入力があれば自動保存
+  const rows = AppState.currentSession.rows || [];
+  const hasInput = rows.some(r => (r.studentName && r.studentName.trim()) || r.isPick);
+  if (AppState.currentSession.editingBatchId || hasInput) {
+    commitCurrentSheet();
+  }
+
+  const batches = getAllBatches();
+  const currentEditingId = AppState.currentSession.editingBatchId;
+  const currentIdx = currentEditingId ? batches.indexOf(currentEditingId) : batches.length;
+
+  // targetPullNumber を含むバッチを探す
+  const targetPull = AppState.pulls.find(p => p.totalPullIndex === targetPullNumber);
+  if (targetPull && targetPull.batchId) {
+    const targetIdx = batches.indexOf(targetPull.batchId);
+    if (targetIdx !== -1) {
+      loadBatchById(targetPull.batchId);
+      triggerSheetSlideAnimation(targetIdx >= currentIdx ? 'right' : 'left');
+      renderSheetTimelineNav();
+      return;
+    }
+  }
+
+  // もしターゲットが pulls の最大連数以上なら新規入力（最新シート）へ
+  if (targetPullNumber > AppState.pulls.length || batches.length === 0) {
+    setupInputSheet();
+    triggerSheetSlideAnimation('right');
+    renderSheetTimelineNav();
+    return;
+  }
+
+  // バッチが見つからない場合、もっとも近いバッチを探す
+  let closestBatchId = batches[0];
+  let minDiff = Infinity;
+  batches.forEach(bId => {
+    const bPulls = AppState.pulls.filter(p => p.batchId === bId);
+    if (bPulls.length > 0) {
+      const avg = (bPulls[0].totalPullIndex + bPulls[bPulls.length - 1].totalPullIndex) / 2;
+      const diff = Math.abs(avg - targetPullNumber);
+      if (diff < minDiff) {
+        minDiff = diff;
+        closestBatchId = bId;
+      }
+    }
+  });
+
+  if (closestBatchId) {
+    const targetIdx = batches.indexOf(closestBatchId);
+    loadBatchById(closestBatchId);
+    triggerSheetSlideAnimation(targetIdx >= currentIdx ? 'right' : 'left');
+    renderSheetTimelineNav();
+  }
+}
+
+/**
+ * ページ位置＆タイムライン更新 (updateSheetPageIndicator の完全上位互換)
+ */
+function updateSheetPageIndicator() {
+  renderSheetTimelineNav();
+}
+
+function renderSheetTimelineNav() {
+  const navContainer = document.getElementById('sheetTimelineNav');
+  if (!navContainer) return;
+
+  const minBoundEl = document.getElementById('timelineMinBound');
+  const maxBoundEl = document.getElementById('timelineMaxBound');
+  const badgeEl = document.getElementById('sheetPageIndicator');
+  const trackWrap = document.getElementById('timelineTrackWrap');
+  const activeRangeEl = document.getElementById('timelineActiveRange');
+  const pinEl = document.getElementById('timelineCurrentPin');
+  const ticksLayer = document.getElementById('timelineTicksLayer');
+  const starsLayer = document.getElementById('timelineStarsLayer');
+
+  const batches = getAllBatches();
+  const currentEditingId = AppState.currentSession.editingBatchId;
+  const isSingle = isSinglePullMode;
+  const unitLabel = isSingle ? '連' : 'ページ';
+
+  // 1. 現在の編集ページ番号と総ページ数の算出
+  let totalPages = batches.length;
+  let currentPage = 1;
+  let currentBatchIdx = -1;
+
+  if (currentEditingId) {
+    const idx = batches.indexOf(currentEditingId);
+    currentPage = idx !== -1 ? (idx + 1) : 1;
+    currentBatchIdx = idx !== -1 ? idx : 0;
+    if (totalPages === 0) totalPages = 1;
+  } else {
+    // 新規入力中（最新ページ）
+    totalPages = batches.length + 1;
+    currentPage = totalPages;
+    currentBatchIdx = batches.length; // 末尾
+  }
+
+  if (badgeEl) {
+    badgeEl.textContent = `${currentPage} / ${totalPages} ${unitLabel}`;
+  }
+
+  // 2. タイムラインの最大連数 (timelineMaxLimit) の算出
+  // 履歴の最大連数、または現在入力中の最大連数
+  let maxPulls = AppState.pulls.length;
+  if (!currentEditingId && AppState.currentSession && AppState.currentSession.rows && AppState.currentSession.rows.length > 0) {
+    const validRows = isSingle ? [AppState.currentSession.rows[0]] : AppState.currentSession.rows;
+    if (validRows[validRows.length - 1]) {
+      maxPulls = Math.max(maxPulls, validRows[validRows.length - 1].total);
+    }
+  }
+  maxPulls = Math.max(10, maxPulls);
+  // 10の倍数に切り上げ（例: 63連なら70連、10連なら10連、30連なら30連）
+  const timelineMaxLimit = Math.max(10, Math.ceil(maxPulls / 10) * 10);
+
+  if (minBoundEl) minBoundEl.textContent = '0';
+  if (maxBoundEl) maxBoundEl.textContent = `${timelineMaxLimit}`;
+
+  // 3. 現在表示中の範囲ハイライト & 赤いピン位置の計算
+  let currentStartTotal = 0;
+  let currentEndTotal = 10;
+  if (AppState.currentSession && AppState.currentSession.rows && AppState.currentSession.rows.length > 0) {
+    const validRows = isSingle ? [AppState.currentSession.rows[0]] : AppState.currentSession.rows;
+    currentStartTotal = Math.max(0, validRows[0].total - 1);
+    currentEndTotal = validRows[validRows.length - 1].total;
+  } else {
+    currentStartTotal = Math.max(0, currentBatchIdx * 10);
+    currentEndTotal = currentStartTotal + (isSingle ? 1 : 10);
+  }
+
+  const startPct = Math.max(0, Math.min(100, (currentStartTotal / timelineMaxLimit) * 100));
+  const endPct = Math.max(0, Math.min(100, (currentEndTotal / timelineMaxLimit) * 100));
+  const widthPct = Math.max(2, endPct - startPct);
+  const centerPct = (startPct + endPct) / 2;
+
+  if (activeRangeEl) {
+    activeRangeEl.style.left = `${startPct}%`;
+    activeRangeEl.style.width = `${widthPct}%`;
+  }
+  if (pinEl) {
+    pinEl.style.left = `${centerPct}%`;
+  }
+
+  // 4. オレンジの節目（10連毎の区切り目盛り）を描画
+  if (ticksLayer) {
+    ticksLayer.innerHTML = '';
+    const numSteps = Math.floor(timelineMaxLimit / 10);
+    for (let step = 1; step <= numSteps; step++) {
+      const pullNum = step * 10;
+      const pct = (pullNum / timelineMaxLimit) * 100;
+      const tick = document.createElement('div');
+      tick.className = 'timeline-tick';
+      tick.style.left = `${pct}%`;
+      tick.setAttribute('data-pull', pullNum);
+      const tooltipMsg = `${pullNum}連の節目 (クリックでジャンプ)`;
+      tick.title = tooltipMsg;
+
+      tick.addEventListener('mouseenter', (e) => {
+        showTimelineTooltip(e, tooltipMsg);
+      });
+      tick.addEventListener('mouseleave', () => {
+        hideTimelineTooltip();
+      });
+      tick.addEventListener('click', (e) => {
+        e.stopPropagation();
+        hideTimelineTooltip();
+        jumpToPullBatch(pullNum);
+      });
+
+      ticksLayer.appendChild(tick);
+    }
+  }
+
+  // トラック全体のクリックでも最寄りのバッチへジャンプ可能に
+  if (trackWrap && !trackWrap.dataset.hasListener) {
+    trackWrap.dataset.hasListener = 'true';
+    trackWrap.addEventListener('click', (e) => {
+      // 目盛りやドット自体のクリックでなければ位置を計算
+      if (e.target.classList.contains('timeline-tick') || e.target.classList.contains('timeline-star-dot')) {
+        return;
+      }
+      const rect = trackWrap.getBoundingClientRect();
+      const clickX = e.clientX - rect.left;
+      const ratio = Math.max(0, Math.min(1, clickX / rect.width));
+      const targetPull = Math.round(ratio * timelineMaxLimit);
+      jumpToPullBatch(targetPull);
+    });
+  }
+
+  // 5. 下側の☆３出現位置ドット (〇印) を描画
+  if (starsLayer) {
+    starsLayer.innerHTML = '';
+    const threeStarPulls = [];
+
+    // 確定済みの履歴から☆3を抽出
+    AppState.pulls.forEach(p => {
+      if (p.isThreeStar && p.studentName) {
+        threeStarPulls.push(p);
+      }
+    });
+
+    // 現在入力中のシートで入力されている☆3（未確定分も反映）
+    if (AppState.currentSession && AppState.currentSession.rows) {
+      const validRows = isSingle ? [AppState.currentSession.rows[0]] : AppState.currentSession.rows;
+      validRows.forEach(r => {
+        if (r.studentName && r.studentName.trim()) {
+          const isAlreadyInHistory = currentEditingId && AppState.pulls.some(p => p.batchId === currentEditingId && p.totalPullIndex === r.total);
+          if (!isAlreadyInHistory) {
+            threeStarPulls.push({
+              totalPullIndex: r.total,
+              studentName: r.studentName,
+              isPick: r.isPick,
+              isNew: r.isNew,
+              batchId: currentEditingId || 'current_unsaved'
+            });
+          }
+        }
+      });
+    }
+
+    threeStarPulls.forEach(p => {
+      const dot = document.createElement('div');
+      dot.className = 'timeline-star-dot';
+
+      if (p.isPick) {
+        dot.classList.add('dot-pickup');
+      } else if (p.isNew) {
+        dot.classList.add('dot-new');
+      } else {
+        dot.classList.add('dot-standard');
+      }
+
+      const pIdx = p.totalPullIndex || 1;
+      const pct = Math.max(0, Math.min(100, (pIdx / timelineMaxLimit) * 100));
+      dot.style.left = `${pct}%`;
+
+      const typeLabel = p.isPick ? 'ピックアップ' : (p.isNew ? '新規' : 'すり抜け');
+      const tooltipMsg = `${pIdx}連: ${p.studentName} (${typeLabel})`;
+      dot.title = tooltipMsg;
+
+      dot.addEventListener('mouseenter', (e) => {
+        showTimelineTooltip(e, tooltipMsg);
+      });
+      dot.addEventListener('mouseleave', () => {
+        hideTimelineTooltip();
+      });
+      dot.addEventListener('click', (e) => {
+        e.stopPropagation();
+        hideTimelineTooltip();
+        jumpToPullBatch(pIdx);
+      });
+
+      starsLayer.appendChild(dot);
+    });
+  }
+}
+
+/**
+ * 行部分の横スライドアニメーションを実行 (direction: 'left' | 'right')
+ */
+function triggerSheetSlideAnimation(direction) {
+  const tbody = document.getElementById('gachaSheetTbody');
+  if (!tbody) return;
+  tbody.classList.remove('slide-from-left', 'slide-from-right');
+  void tbody.offsetWidth; // 強制リフローでアニメーションを再トリガー
+  tbody.classList.add(direction === 'left' ? 'slide-from-left' : 'slide-from-right');
 }
 
 /**
@@ -636,6 +933,7 @@ function loadBatchById(targetBatchId) {
 
   AppState.currentSession.rows = rows;
   renderInputSheetTable();
+  updateSheetPageIndicator();
 }
 
 /**
@@ -652,7 +950,7 @@ function loadPreviousBatch() {
   }
 
   const batches = getAllBatches();
-  if (batches.length === 0) return;
+  if (batches.length === 0) return false;
 
   let targetBatchId = null;
   if (!currentEditingId) {
@@ -668,13 +966,15 @@ function loadPreviousBatch() {
     if (currentIdx > 0) {
       targetBatchId = batches[currentIdx - 1];
     } else {
-      return; // 最古のバッチ
+      return false; // 最古のバッチ
     }
   }
 
   if (targetBatchId) {
     loadBatchById(targetBatchId);
+    return true;
   }
+  return false;
 }
 
 /**
@@ -706,10 +1006,13 @@ function deleteCurrentBatch() {
   if (remainingBatches.length > 0) {
     AppState.currentSession.editingBatchId = null;
     loadPreviousBatch();
+    triggerSheetSlideAnimation('left');
   } else {
     AppState.currentSession.editingBatchId = null;
     setupInputSheet();
+    triggerSheetSlideAnimation('left');
   }
+  updateSheetPageIndicator();
 }
 
 /**
@@ -719,13 +1022,14 @@ function applyPullModeUI() {
   const btnPrev = document.getElementById('btnPrevPull');
   const btnToggle = document.getElementById('btnTogglePullCount');
   const btnNext = document.getElementById('btnSheetSubmitNext');
+  const btnAddBatch = document.getElementById('btnAddNextBatch');
   const btnDelete = document.getElementById('btnDeleteCurrentPull');
   const tbody = document.getElementById('gachaSheetTbody');
 
   const batches = getAllBatches();
   const currentEditingId = AppState.currentSession.editingBatchId;
 
-  // ボタンテキスト更新 (1連モード時は「前の1連へ」「この1連を削除」「次の1連へ」に連動)
+  // ボタンテキスト更新 (1連モード時は「前の1連へ」「この1連を削除」「1連追加」「次の1連へ」に連動)
   if (btnPrev) {
     btnPrev.textContent = isSinglePullMode ? '◁ 前の1連へ' : '◁ 前の10連へ';
     if (batches.length === 0 || (currentEditingId && batches.indexOf(currentEditingId) === 0)) {
@@ -744,6 +1048,10 @@ function applyPullModeUI() {
     }
   }
 
+  if (btnAddBatch) {
+    btnAddBatch.textContent = isSinglePullMode ? '1連追加' : '10連追加';
+  }
+
   if (btnNext) {
     btnNext.textContent = isSinglePullMode ? '次の1連へ ▶' : '次の10連へ ▶';
   }
@@ -756,6 +1064,8 @@ function applyPullModeUI() {
       btnDelete.disabled = false;
     }
   }
+
+  updateSheetPageIndicator();
 
   if (!tbody) return;
 
@@ -1441,26 +1751,23 @@ const convergenceRelativeMatrixPlugin = {
   id: 'convergenceRelativeMatrixPlugin',
   beforeDatasetsDraw(chart) {
     try {
-      const { ctx, chartArea: { left, right, top, bottom } } = chart;
+      const { ctx, chartArea: { left, right, bottom } } = chart;
       if (!chart.scales || !chart.scales.y || !chart.scales.x) return;
 
       const isDark = document.body.classList.contains('theme-tactical-dark');
 
-      // 最下段 (-100%) のすり抜け生徒用背景帯（ba_gacha_tabulation準拠）
-      const yMinus100 = chart.scales.y.getPixelForValue(-100);
-      if (yMinus100 >= top && yMinus100 <= bottom + 25) {
-        const boxHeight = 34;
-        const boxTop = yMinus100 - boxHeight / 2;
+      // 最下段のすり抜け生徒用背景帯（プロットエリア最下部、ba_gacha_tabulation準拠）
+      const boxHeight = 32;
+      const boxTop = bottom - boxHeight;
 
-        ctx.save();
-        ctx.fillStyle = isDark ? 'rgba(22, 36, 54, 0.65)' : 'rgba(228, 236, 246, 0.55)';
-        ctx.fillRect(left, boxTop, right - left, boxHeight);
+      ctx.save();
+      ctx.fillStyle = isDark ? 'rgba(22, 36, 54, 0.65)' : 'rgba(228, 236, 246, 0.55)';
+      ctx.fillRect(left, boxTop, right - left, boxHeight);
 
-        ctx.strokeStyle = isDark ? 'rgba(0, 174, 239, 0.25)' : 'rgba(0, 174, 239, 0.18)';
-        ctx.lineWidth = 1;
-        ctx.strokeRect(left, boxTop, right - left, boxHeight);
-        ctx.restore();
-      }
+      ctx.strokeStyle = isDark ? 'rgba(0, 174, 239, 0.25)' : 'rgba(0, 174, 239, 0.18)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(left, boxTop, right - left, boxHeight);
+      ctx.restore();
     } catch (e) {
       console.error('Error in beforeDatasetsDraw:', e);
     }
@@ -1483,9 +1790,8 @@ const convergenceRelativeMatrixPlugin = {
         if (baseX < left || baseX > right) return;
 
         const isPick = Boolean(pull.isPick);
-        // ピックアップ生徒は100%の少し下あたりの高さ（Y=85%）、最下段にピックアップ以外（Y=-100%）
-        const targetYVal = isPick ? 85 : -100;
-        const centerY = chart.scales.y.getPixelForValue(targetYVal);
+        // ピックアップ生徒は中央の基準線(0%)より上部（top + 24px）、すり抜け生徒は最下段（bottom - 16px）
+        const centerY = isPick ? (top + 24) : (bottom - 16);
 
         // 重なり検出とカスケードずらし (ba_gacha_tabulation再現)
         let finalX = baseX;
@@ -1617,11 +1923,13 @@ function renderConvergenceChart() {
     { x: maxPulls, y: 0 }
   ];
 
-  // Y軸の最大値計算（ピックアップが85%に配置されるため、最低でも120%を確保）
+  // Y軸の最大値・最小値計算（中心点 0% をグラフの中央に配置するため、正負対称にする）
   const deviations = uniquePoints.map(p => p.y);
-  const maxDev = deviations.length > 0 ? Math.max(...deviations) : 0;
-  const absMax = Math.max(100, Math.ceil(maxDev * 1.15));
-  const yMaxRounded = Math.max(120, Math.ceil(absMax / 50) * 50);
+  let maxAbsDev = 100;
+  deviations.forEach(d => {
+    if (Math.abs(d) > maxAbsDev) maxAbsDev = Math.abs(d);
+  });
+  const yLimit = Math.max(120, Math.ceil((maxAbsDev * 1.15) / 50) * 50);
 
   if (AppState.chartInstance) {
     AppState.chartInstance.destroy();
@@ -1704,8 +2012,8 @@ function renderConvergenceChart() {
           grid: { color: gridColor }
         },
         y: {
-          min: -120,
-          max: yMaxRounded,
+          min: -yLimit,
+          max: yLimit,
           ticks: {
             display: false
           },
@@ -2032,19 +2340,26 @@ function initEventListeners() {
     });
   });
 
-  // 2. シート操作ボタン（2行構成: 1行目=前の10連/1連切替/次の10連, 2行目=この10連削除/確定）
+  // 2. シート操作ボタン（2行構成: 1行目=前の10連/1連切替/次の10連, 2行目=この10連削除/10連追加/確定）
   const btnPrevPull = document.getElementById('btnPrevPull');
   const btnToggleCount = document.getElementById('btnTogglePullCount');
   const btnSubmitNext = document.getElementById('btnSheetSubmitNext');
+  const btnAddNextBatch = document.getElementById('btnAddNextBatch');
   const btnDeleteCurrent = document.getElementById('btnDeleteCurrentPull');
   const btnSubmitOk = document.getElementById('btnSheetSubmitOk');
 
+  // ◁ 前の10連へ
   if (btnPrevPull) {
     btnPrevPull.addEventListener('click', () => {
-      loadPreviousBatch();
+      const moved = loadPreviousBatch();
+      if (moved) {
+        triggerSheetSlideAnimation('left');
+        updateSheetPageIndicator();
+      }
     });
   }
 
+  // 1連に切替 / 10連に切替
   if (btnToggleCount) {
     btnToggleCount.addEventListener('click', () => {
       isSinglePullMode = !isSinglePullMode;
@@ -2052,22 +2367,44 @@ function initEventListeners() {
     });
   }
 
+  // 次の10連へ ▶（次の10連がある場合のみ移動、最終ページで押した時はシェイクアニメーション）
   if (btnSubmitNext) {
     btnSubmitNext.addEventListener('click', () => {
       const currentEditingId = AppState.currentSession.editingBatchId;
-      commitCurrentSheet();
+      const batches = getAllBatches();
+
       if (currentEditingId) {
-        const batches = getAllBatches();
         const currentIdx = batches.indexOf(currentEditingId);
         if (currentIdx !== -1 && currentIdx < batches.length - 1) {
+          commitCurrentSheet();
           loadBatchById(batches[currentIdx + 1]);
+          triggerSheetSlideAnimation('right');
+          updateSheetPageIndicator();
           return;
         }
       }
-      setupInputSheet();
+
+      // 最終ページ（これ以上先の10連がない）の場合: シェイクアニメーションを実行
+      btnSubmitNext.classList.remove('btn-shake');
+      void btnSubmitNext.offsetWidth; // リフロー強制
+      btnSubmitNext.classList.add('btn-shake');
+      setTimeout(() => {
+        btnSubmitNext.classList.remove('btn-shake');
+      }, 400);
     });
   }
 
+  // ＋ 10連追加（新規の10連枠を追加）
+  if (btnAddNextBatch) {
+    btnAddNextBatch.addEventListener('click', () => {
+      commitCurrentSheet();
+      setupInputSheet();
+      triggerSheetSlideAnimation('right');
+      updateSheetPageIndicator();
+    });
+  }
+
+  // この10連を削除
   if (btnDeleteCurrent) {
     btnDeleteCurrent.addEventListener('click', () => {
       const isSingle = isSinglePullMode;
@@ -2080,6 +2417,7 @@ function initEventListeners() {
     });
   }
 
+  // ✔ 確定して集計へ
   if (btnSubmitOk) {
     btnSubmitOk.addEventListener('click', () => {
       commitCurrentSheet();
@@ -2559,4 +2897,8 @@ if (typeof window !== 'undefined') {
   window.recalculateCurrentSessionCharges = recalculateCurrentSessionCharges;
   window.loadPreviousBatch = loadPreviousBatch;
   window.commitCurrentSheet = commitCurrentSheet;
+  window.updateSheetPageIndicator = updateSheetPageIndicator;
+  window.renderSheetTimelineNav = renderSheetTimelineNav;
+  window.jumpToPullBatch = jumpToPullBatch;
+  window.triggerSheetSlideAnimation = triggerSheetSlideAnimation;
 }

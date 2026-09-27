@@ -106,10 +106,10 @@ body {
 .app-layout-container {
   max-width: 1200px;
   margin: 0 auto;
-  padding: 12px 16px 32px;
+  padding: 8px 10px 16px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
 }
 
 /* ==========================================================================
@@ -118,11 +118,11 @@ body {
 .app-top-header {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  padding: 10px 14px;
+  padding: 8px 12px;
   box-shadow: var(--shadow-sm);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
@@ -1287,11 +1287,11 @@ body.theme-tactical-dark .schale-table th {
 .gacha-sheet-panel {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
   background: var(--bg-card);
   border: 1.5px solid var(--border-strong);
   border-radius: var(--radius-md);
-  padding: 10px 12px;
+  padding: 6px 8px;
   box-shadow: var(--shadow-sm);
 }
 
@@ -1337,7 +1337,7 @@ body.theme-tactical-dark .schale-sheet-table th {
 }
 
 .schale-sheet-table td {
-  padding: 3px 6px;
+  padding: 2px 5px;
   border-bottom: 1px solid rgba(0, 174, 239, 0.16);
   border-right: 1px solid rgba(0, 174, 239, 0.14);
   vertical-align: middle;
@@ -1441,8 +1441,8 @@ body.theme-tactical-dark .schale-sheet-table tr.row-charge-100 td {
   flex: 1;
   min-width: 0;
   width: 100%;
-  padding: 6px 10px;
-  font-size: 13px;
+  padding: 3.5px 7px;
+  font-size: 12.5px;
   font-weight: 600;
   font-family: var(--font-family);
   color: var(--text-main);
@@ -1557,12 +1557,334 @@ body.theme-tactical-dark .sheet-student-input.is-pickup {
   align-items: center;
 }
 
-/* 2行目: この10連を削除 | ✔ 確定して集計へ */
+/* ========================================================================= */
+/* 視覚的タイムライン＆ページナビゲーター (添付画像準拠: 節目クリック・☆3ドット表示) */
+/* ========================================================================= */
+.sheet-timeline-nav {
+  margin: 6px 0 5px 0;
+  padding: 4px 8px 6px 8px;
+  background: rgba(0, 174, 239, 0.04);
+  border: 1px solid rgba(0, 174, 239, 0.18);
+  border-radius: 8px;
+  user-select: none;
+  position: relative;
+}
+
+body.theme-tactical-dark .sheet-timeline-nav {
+  background: rgba(18, 27, 40, 0.6);
+  border-color: rgba(0, 174, 239, 0.3);
+}
+
+.timeline-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2px;
+  font-family: 'JetBrains Mono', 'Outfit', sans-serif;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.timeline-bound-txt {
+  color: #008ec4;
+  font-size: 11px;
+  font-weight: 800;
+  min-width: 28px;
+}
+
+.timeline-bound-txt:last-child {
+  text-align: right;
+}
+
+body.theme-tactical-dark .timeline-bound-txt {
+  color: #38bdf8;
+}
+
+.sheet-page-indicator-badge {
+  font-size: 11px;
+  font-weight: 800;
+  font-family: 'JetBrains Mono', 'Outfit', sans-serif;
+  color: #008ec4;
+  background: rgba(0, 174, 239, 0.12);
+  border: 1px solid rgba(0, 174, 239, 0.3);
+  border-radius: 10px;
+  padding: 1.5px 10px;
+  letter-spacing: 0.5px;
+  transition: all 0.2s ease;
+}
+
+body.theme-tactical-dark .sheet-page-indicator-badge {
+  color: #38bdf8;
+  background: rgba(0, 174, 239, 0.2);
+  border-color: rgba(0, 174, 239, 0.45);
+}
+
+/* タイムライントラック領域 */
+.timeline-track-wrap {
+  position: relative;
+  height: 28px;
+  width: 100%;
+  margin: 1px 0;
+  cursor: pointer;
+}
+
+/* 横軸ベースレール */
+.timeline-rail {
+  position: absolute;
+  top: 9px;
+  left: 0;
+  right: 0;
+  height: 2.5px;
+  background: linear-gradient(90deg, #00adef, #6366f1);
+  border-radius: 2px;
+  box-shadow: 0 1px 3px rgba(0, 174, 239, 0.3);
+}
+
+/* レール両端のキャップ縦棒 */
+.timeline-rail::before,
+.timeline-rail::after {
+  content: '';
+  position: absolute;
+  top: -4px;
+  width: 2px;
+  height: 10px;
+  background: #6366f1;
+  border-radius: 1px;
+}
+
+.timeline-rail::before {
+  left: 0;
+  background: #00adef;
+}
+
+.timeline-rail::after {
+  right: 0;
+  background: #6366f1;
+}
+
+/* 現在ページの範囲ハイライト */
+.timeline-active-range {
+  position: absolute;
+  top: 5px;
+  height: 10px;
+  background: rgba(0, 174, 239, 0.28);
+  border: 1px solid rgba(0, 174, 239, 0.6);
+  border-radius: 4px;
+  pointer-events: none;
+  transition: left 0.2s ease, width 0.2s ease;
+  z-index: 2;
+}
+
+body.theme-tactical-dark .timeline-active-range {
+  background: rgba(0, 229, 255, 0.25);
+  border-color: rgba(0, 229, 255, 0.7);
+}
+
+/* 現在のページ位置を示す赤い縦線ピン (添付画像再現) */
+.timeline-current-pin {
+  position: absolute;
+  top: 0px;
+  width: 3.5px;
+  height: 18px;
+  background: #ef4444;
+  border-radius: 2px;
+  box-shadow: 0 0 6px rgba(239, 68, 68, 0.75);
+  transform: translateX(-50%);
+  pointer-events: none;
+  transition: left 0.2s ease;
+  z-index: 5;
+}
+
+.timeline-current-pin::before {
+  content: '';
+  position: absolute;
+  top: -3px;
+  left: -2px;
+  width: 7.5px;
+  height: 7.5px;
+  border-radius: 50%;
+  background: #ef4444;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+/* 10連毎のオレンジ区切り目盛りレイヤー */
+.timeline-ticks-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+}
+
+/* 10連ごとのオレンジ目盛り (クリックでジャンプ) */
+.timeline-tick {
+  position: absolute;
+  top: 3px;
+  width: 3px;
+  height: 13px;
+  background: #f97316;
+  border-radius: 1.5px;
+  transform: translateX(-50%);
+  cursor: pointer;
+  pointer-events: auto;
+  transition: all 0.15s ease;
+  z-index: 3;
+}
+
+.timeline-tick:hover {
+  background: #ea580c;
+  height: 19px;
+  top: 0px;
+  width: 4px;
+  box-shadow: 0 0 8px rgba(249, 115, 22, 0.85);
+  z-index: 8;
+}
+
+/* ☆3出現位置ドットレイヤー (レールの下側) */
+.timeline-stars-layer {
+  position: absolute;
+  top: 13px;
+  left: 0;
+  right: 0;
+  height: 14px;
+  pointer-events: none;
+}
+
+/* ☆3出現位置ドット (〇印) */
+.timeline-star-dot {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  transform: translate(-50%, 0);
+  cursor: pointer;
+  pointer-events: auto;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  z-index: 6;
+}
+
+.timeline-star-dot:hover {
+  transform: translate(-50%, -2px) scale(1.4);
+  z-index: 12;
+}
+
+/* ピックアップ生徒ドット (ゴールド/黄色) */
+.timeline-star-dot.dot-pickup {
+  background: #f59e0b;
+  border: 1.5px solid #ffffff;
+  box-shadow: 0 1px 4px rgba(245, 158, 11, 0.8);
+}
+
+/* 新規生徒ドット (ピンク) */
+.timeline-star-dot.dot-new {
+  background: #ec4899;
+  border: 1.5px solid #ffffff;
+  box-shadow: 0 1px 4px rgba(236, 72, 153, 0.8);
+}
+
+/* すり抜け生徒ドット (グリーン/シアン 添付画像再現) */
+.timeline-star-dot.dot-standard {
+  background: #10b981;
+  border: 1.5px solid #ffffff;
+  box-shadow: 0 1px 4px rgba(16, 185, 129, 0.8);
+}
+
+/* タイムラインのフローティングツールチップ */
+.timeline-tooltip {
+  position: fixed;
+  background: rgba(18, 27, 40, 0.95);
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 8px;
+  border-radius: 4px;
+  border: 1px solid rgba(0, 174, 239, 0.5);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+  white-space: nowrap;
+  z-index: 9999;
+  transform: translate(-50%, -100%) translateY(-6px);
+  display: none;
+}
+
+/* 2行目: この10連を削除 | 10連追加 | ✔ 確定して集計へ */
 .sheet-action-row-bottom {
   display: grid;
-  grid-template-columns: 1fr 1.25fr;
-  gap: 6px;
+  grid-template-columns: 1fr 1fr 1.25fr;
+  gap: 5px;
   align-items: center;
+}
+
+/* 10連追加 ボタン */
+.btn-action-add {
+  background: rgba(0, 174, 239, 0.08);
+  border: 1.5px solid var(--border-glow);
+  color: var(--primary-dark);
+  padding: 7px 6px;
+  font-size: 11.5px;
+  font-weight: 800;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: var(--transition);
+  text-align: center;
+  white-space: nowrap;
+}
+
+body.theme-tactical-dark .btn-action-add {
+  background: rgba(0, 174, 239, 0.15);
+  color: var(--cyan-bright);
+}
+
+.btn-action-add:hover {
+  background: rgba(0, 174, 239, 0.2);
+  border-color: var(--primary);
+  box-shadow: 0 2px 8px rgba(0, 174, 239, 0.25);
+  transform: translateY(-1px);
+}
+
+/* 最終ページで押したときのシェイクアニメーション */
+@keyframes buttonShake {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-5px); }
+  40%, 80% { transform: translateX(5px); }
+}
+
+.btn-shake {
+  animation: buttonShake 0.35s ease-in-out !important;
+  background: #f59e0b !important;
+  box-shadow: 0 0 10px rgba(245, 158, 11, 0.5) !important;
+}
+
+/* 行部分の横スライドアニメーション */
+@keyframes slideFromLeft {
+  0% {
+    opacity: 0.2;
+    transform: translateX(-35px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideFromRight {
+  0% {
+    opacity: 0.2;
+    transform: translateX(35px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.slide-from-left {
+  animation: slideFromLeft 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.slide-from-right {
+  animation: slideFromRight 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 /* ◁ 前の10連へ ボタン */
