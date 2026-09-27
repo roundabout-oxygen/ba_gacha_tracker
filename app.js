@@ -1,10 +1,10 @@
 /**
  * ブルーアーカイブ リアルタイムガチャ集計 (BA Gacha Live Tracker)
- * Version: v1.0.7
+ * Version: v1.0.8
  * Core Application Logic & State Management
  */
 
-const APP_VERSION = 'v1.0.7';
+const APP_VERSION = 'v1.0.8';
 const REMOTE_STUDENT_ICONS_URL = 'https://raw.githubusercontent.com/roundabout-oxygen/ba_gacha_tabulation/main/data/student_icons.json';
 
 // 単発 (1連) モードかどうかのフラグ (false = 10連モード, true = 1連モード)
@@ -715,14 +715,6 @@ function onStudentInputChange(rowIndex, value) {
       else inputEl.classList.remove('is-pickup');
     }
 
-    // 初排出かどうか判定（これまでのpullsに存在しない場合 true）
-    const alreadyPulled = AppState.pulls.some(p =>
-      normalizeStudentName(p.studentName) === normalizeStudentName(value)
-    );
-    row.isNew = !alreadyPulled;
-    const chkNew = document.querySelectorAll(`.col-chk input[data-row-index="${rowIndex}"]`)[1];
-    if (chkNew) chkNew.checked = row.isNew;
-
   } else {
     if (inputEl) {
       inputEl.classList.remove('has-value');
@@ -792,33 +784,24 @@ function updateStudentGuidePopup(inputEl, query, rowIndex) {
     listEl.appendChild(item);
   });
 
-  // ポップアップ位置計算 (ユーザー要望: IME変換候補・履歴と絶対に被らないよう右側に配置)
+  // ポップアップ位置計算 (ユーザー要望: 検索・IME予測窓と被らないよう左側に縦長表示)
   popup.style.display = 'flex';
   const rect = inputEl.getBoundingClientRect();
-  const popupWidth = 210;
-  const popupHeight = Math.min(230, popup.scrollHeight || 210);
+  const popupWidth = 175;
+  const popupHeight = Math.min(310, popup.scrollHeight || 260);
 
-  // 1. 水平位置 (左右) の決定
-  // 右側に十分なスペースがあれば入力欄の右隣に配置
-  // 画面幅が狭い小窓の場合は画面右端に寄せて配置し、入力中の文字＆上下のIME変換候補領域と完全分離
-  const spaceRight = window.innerWidth - rect.right;
-  let leftPos;
-
-  if (spaceRight >= popupWidth + 10) {
-    leftPos = rect.right + 6;
-  } else {
-    // 小窓時: 画面右端にピッタリ配置（入力欄の左側の文字入力部＆IME候補とは完全に被らない）
-    leftPos = window.innerWidth - popupWidth - 8;
-    leftPos = Math.max(4, leftPos);
-  }
+  // 1. 水平位置 (左右) の決定: 入力枠の左側に配置
+  let leftPos = rect.left - popupWidth - 4;
+  // 画面左端からはみ出さないよう安全クランプ
+  leftPos = Math.max(6, leftPos);
 
   // 2. 垂直位置 (上下) の決定 (position: fixed なのでビューポート基準)
   // 通常は入力欄の上端 (rect.top) に合わせる
   // 画面下端をはみ出る場合（下側の行など）は、ポップアップの下端を入力欄の下端に合わせて上方向に展開
   let topPos = rect.top;
-  const maxAllowedBottom = window.innerHeight - 10;
+  const maxAllowedBottom = window.innerHeight - 8;
   if (rect.top + popupHeight > maxAllowedBottom) {
-    topPos = Math.max(10, rect.bottom - popupHeight);
+    topPos = Math.max(8, rect.bottom - popupHeight);
   }
 
   popup.style.top = `${topPos}px`;
