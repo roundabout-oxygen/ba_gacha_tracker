@@ -26,7 +26,7 @@
           <div class="brand-logo-icon">G</div>
           <div class="brand-titles">
             <h1 class="brand-name">シャーレ ガチャ集計</h1>
-            <span class="version-badge" id="appVersionBadge">v1.0.10</span>
+            <span class="version-badge" id="appVersionBadge">v1.0.11</span>
           </div>
         </div>
         <div class="header-right-tools">
@@ -97,8 +97,11 @@
       <button class="nav-tab-btn" data-tab="tabGacha">
         <span class="tab-icon">✨</span> ガチャを引く
       </button>
-      <button class="nav-tab-btn tab-btn-settings" id="btnTabSettings" data-tab="tabSettings">
-        <span class="tab-icon">⚙️</span>
+      <button class="nav-tab-btn" data-tab="tabHistory" title="ガチャ履歴一覧">
+        <span class="tab-icon">💾</span> 履歴
+      </button>
+      <button class="nav-tab-btn" id="btnTabSettings" data-tab="tabSettings" title="設定">
+        <span class="tab-icon">⚙️</span> 設定
       </button>
     </nav>
 
@@ -132,60 +135,6 @@
           </div>
         </div>
 
-        <!-- 分析サマリー (ハマり・天井・運判定) -->
-        <div class="cyan-card analysis-summary-card">
-          <div class="analysis-grid-cols">
-            <div class="analysis-col">
-              <span class="analysis-lbl">☆3なし最大ハマり</span>
-              <div class="analysis-val warning" id="dashMaxStreak">0 <small>連</small></div>
-              <span class="analysis-sub-txt">現在: <b id="dashCurrentStreak">0</b> 連</span>
-            </div>
-            <div class="analysis-col">
-              <span class="analysis-lbl">天井到達 (200連)</span>
-              <div class="analysis-val" id="dashCeilingCount">0 <small>回</small></div>
-              <span class="analysis-sub-txt">到達率: <span id="dashCeilingRate">0.0</span>%</span>
-            </div>
-            <div class="analysis-col">
-              <span class="analysis-lbl">ガチャ運総合判定</span>
-              <div class="analysis-val" id="dashLuckRank">-</div>
-              <span class="analysis-sub-txt" id="dashLuckDetail">二項分布統計</span>
-            </div>
-            <div class="analysis-col">
-              <span class="analysis-lbl">チャージ進行</span>
-              <div class="analysis-val text-cyan" id="dashCurrentChargeVal">0 <small>/ 100</small></div>
-              <span class="analysis-sub-txt" id="dashChargeRemainingText">あと 100連</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- ガチャ履歴データ一覧テーブル -->
-        <div class="cyan-card history-section-card">
-          <div class="history-section-header">
-            <span class="card-head-title">ガチャ履歴一覧 (<span id="historyRowCount">0</span> 連)</span>
-            <div class="history-btn-actions">
-              <button id="btnCopyTsv" class="btn-cyan-sm" title="スプレッドシート用TSVコピー">📋 TSVコピー</button>
-              <button id="btnDownloadCsv" class="btn-cyan-sm" title="CSV保存">💾 CSV保存</button>
-              <button id="btnUndoLastPull" class="btn-danger-sm" title="直前の引きを取り消す">↩ 取消</button>
-            </div>
-          </div>
-          <div class="history-table-scrollbox">
-            <table class="schale-table" id="historyTable">
-              <thead>
-                <tr>
-                  <th>連番</th>
-                  <th>累計</th>
-                  <th>チャージ</th>
-                  <th>生徒名</th>
-                  <th>種別</th>
-                  <th>pick</th>
-                  <th>新</th>
-                  <th>備考</th>
-                </tr>
-              </thead>
-              <tbody id="historyTableTbody"></tbody>
-            </table>
-          </div>
-        </div>
       </section>
 
       <!-- ======================================================================= -->
@@ -247,104 +196,132 @@
         </div>
       </section>
 
+      <!-- ======================================================================= -->
+      <!-- タブ3: 履歴 (ガチャ履歴一覧) -->
+      <!-- ======================================================================= -->
+      <section class="tab-view-content" id="tabHistory">
+        <div class="cyan-card history-section-card">
+          <div class="history-section-header">
+            <span class="card-head-title">ガチャ履歴一覧 (<span id="historyRowCount">0</span> 連)</span>
+            <div class="history-btn-actions">
+              <button id="btnCopyTsv" class="btn-cyan-sm" title="スプレッドシート用TSVコピー">📋 TSVコピー</button>
+              <button id="btnDownloadCsv" class="btn-cyan-sm" title="CSV保存">💾 CSV保存</button>
+              <button id="btnUndoLastPull" class="btn-danger-sm" title="直前の引きを取り消す">↩ 取消</button>
+            </div>
+          </div>
+          <div class="history-table-scrollbox">
+            <table class="schale-table" id="historyTable">
+              <thead>
+                <tr>
+                  <th>連番</th>
+                  <th>累計</th>
+                  <th>チャージ</th>
+                  <th>生徒名</th>
+                  <th>種別</th>
+                  <th>pick</th>
+                  <th>new</th>
+                  <th>備考</th>
+                </tr>
+              </thead>
+              <tbody id="historyTableTbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ======================================================================= -->
+      <!-- タブ4: 設定 (ガチャ設定 & ツール) -->
+      <!-- ======================================================================= -->
+      <section class="tab-view-content" id="tabSettings">
+        <div class="cyan-card settings-panel-card">
+          <div class="settings-panel-body">
+            <!-- 確率設定 -->
+            <div class="form-group-block">
+              <label class="block-label">ガチャ枠の確率:</label>
+              <div class="segmented-radio-group">
+                <label class="radio-pill">
+                  <input type="radio" name="settingsRateRadio" value="0.03" id="settingsRate3">
+                  <span class="pill-btn">通常募集 (☆3: 3%)</span>
+                </label>
+                <label class="radio-pill">
+                  <input type="radio" name="settingsRateRadio" value="0.06" id="settingsRate6">
+                  <span class="pill-btn pill-fest">フェス募集 (☆3: 6%)</span>
+                </label>
+              </div>
+            </div>
+
+            <!-- チャージ引継ぎ設定 -->
+            <div class="form-group-block">
+              <label class="block-label" for="settingsInitChargeInput">ガチャのチャージ引継ぎ数 (0〜199):</label>
+              <div class="input-unit-wrapper">
+                <input type="number" id="settingsInitChargeInput" class="styled-form-input" min="0" max="199" value="0">
+                <span class="unit-tag">連分チャージ済</span>
+              </div>
+            </div>
+
+            <!-- ピックアップ生徒設定 -->
+            <div class="form-group-block">
+              <label class="block-label">ピックアップ生徒設定:</label>
+              <div class="pickup-tags-container" id="settingsPickupTags"></div>
+              <div class="add-pickup-row">
+                <input type="text" id="settingsPickupInput" class="styled-form-input" placeholder="生徒名を入力..." autocomplete="off">
+                <button type="button" id="btnSettingsAddPickup" class="btn-cyan-sm">追加</button>
+              </div>
+              <div id="settingsSuggestDropdown" class="student-suggest-dropdown"></div>
+            </div>
+
+            <!-- テーマ切り替え (水色シャーレ ⇔ タクティカルダーク) -->
+            <div class="form-group-block">
+              <label class="block-label">カラーテーマ:</label>
+              <div class="theme-switch-row">
+                <button type="button" id="btnThemeCyan" class="btn-cyan-outline btn-theme-choice active">
+                  💧 水色シャーレ (標準)
+                </button>
+                <button type="button" id="btnThemeDark" class="btn-cyan-outline btn-theme-choice">
+                  🌌 タクティカルダーク
+                </button>
+              </div>
+            </div>
+
+            <!-- 新規生徒アイコン仮登録 & エディタ起動 -->
+            <div class="form-group-block custom-tools-block">
+              <label class="block-label">新規生徒アイコン仮登録機能:</label>
+              <div class="custom-tools-btns">
+                <button type="button" id="btnOpenCustomModalFromSettings" class="btn-cyan-sm">
+                  ➕ 新規生徒アイコン仮登録
+                </button>
+                <button type="button" id="btnOpenCustomEditorFromSettings" class="btn-cyan-sm">
+                  📝 仮登録エディタ & 共有管理
+                </button>
+                <button type="button" id="btnSyncWikiDirect" class="btn-cyan-sm" title="ba_gacha_tabulationから最新生徒アイコンを自動同期">
+                  🔄 生徒図鑑データを自動更新
+                </button>
+              </div>
+            </div>
+
+            <!-- 危険ゾーン: 全データ初期化 -->
+            <div class="form-group-block danger-block">
+              <label class="block-label">データリセット:</label>
+              <button type="button" id="btnResetAllData" class="btn-danger-outline-sm">
+                ⚠️ ガチャ履歴を全て初期化
+              </button>
+            </div>
+          </div>
+
+          <!-- フッター: キャンセルボタン & 保存ボタン -->
+          <div class="settings-actions-footer">
+            <button type="button" id="btnCancelSettings" class="btn-dialog-cancel">
+              キャンセル
+            </button>
+            <button type="button" id="btnSaveSettings" class="btn-dialog-save">
+              設定を保存
+            </button>
+          </div>
+        </div>
+      </section>
+
     </main>
   </div>
-
-  <!-- ========================================================================= -->
-  <!-- ⚙ 設定モーダル（キャンセルボタン付き・仮登録・テーマ・確率・引継チャージ集約） -->
-  <!-- ========================================================================= -->
-  <dialog class="schale-dialog" id="modalSettings">
-    <div class="dialog-box modal-settings-box">
-      <div class="dialog-header">
-        <h3 class="dialog-title">⚙️ ガチャ設定 & ツール</h3>
-        <button type="button" class="dialog-close-x" id="btnCloseSettingsX">✕</button>
-      </div>
-
-      <div class="dialog-body settings-body-content">
-        <!-- 確率設定 -->
-        <div class="form-group-block">
-          <label class="block-label">ガチャ枠の確率:</label>
-          <div class="segmented-radio-group">
-            <label class="radio-pill">
-              <input type="radio" name="settingsRateRadio" value="0.03" id="settingsRate3">
-              <span class="pill-btn">通常募集 (☆3: 3%)</span>
-            </label>
-            <label class="radio-pill">
-              <input type="radio" name="settingsRateRadio" value="0.06" id="settingsRate6">
-              <span class="pill-btn pill-fest">フェス募集 (☆3: 6%)</span>
-            </label>
-          </div>
-        </div>
-
-        <!-- チャージ引継ぎ設定 -->
-        <div class="form-group-block">
-          <label class="block-label" for="settingsInitChargeInput">ガチャのチャージ引継ぎ数 (0〜199):</label>
-          <div class="input-unit-wrapper">
-            <input type="number" id="settingsInitChargeInput" class="styled-form-input" min="0" max="199" value="0">
-            <span class="unit-tag">連分チャージ済</span>
-          </div>
-        </div>
-
-        <!-- ピックアップ生徒設定 -->
-        <div class="form-group-block">
-          <label class="block-label">ピックアップ生徒設定:</label>
-          <div class="pickup-tags-container" id="settingsPickupTags"></div>
-          <div class="add-pickup-row">
-            <input type="text" id="settingsPickupInput" class="styled-form-input" placeholder="生徒名を入力..." autocomplete="off">
-            <button type="button" id="btnSettingsAddPickup" class="btn-cyan-sm">追加</button>
-          </div>
-          <div id="settingsSuggestDropdown" class="student-suggest-dropdown"></div>
-        </div>
-
-        <!-- テーマ切り替え (水色シャーレ ⇔ タクティカルダーク) -->
-        <div class="form-group-block">
-          <label class="block-label">カラーテーマ:</label>
-          <div class="theme-switch-row">
-            <button type="button" id="btnThemeCyan" class="btn-cyan-outline btn-theme-choice active">
-              💧 水色シャーレ (標準)
-            </button>
-            <button type="button" id="btnThemeDark" class="btn-cyan-outline btn-theme-choice">
-              🌌 タクティカルダーク
-            </button>
-          </div>
-        </div>
-
-        <!-- 新規生徒アイコン仮登録 & エディタ起動 -->
-        <div class="form-group-block custom-tools-block">
-          <label class="block-label">新規生徒アイコン仮登録機能:</label>
-          <div class="custom-tools-btns">
-            <button type="button" id="btnOpenCustomModalFromSettings" class="btn-cyan-sm">
-              ➕ 新規生徒アイコン仮登録
-            </button>
-            <button type="button" id="btnOpenCustomEditorFromSettings" class="btn-cyan-sm">
-              📝 仮登録エディタ & 共有管理
-            </button>
-            <button type="button" id="btnSyncWikiDirect" class="btn-cyan-sm" title="ba_gacha_tabulationから最新生徒アイコンを自動同期">
-              🔄 生徒図鑑データを自動更新
-            </button>
-          </div>
-        </div>
-
-        <!-- 危険ゾーン: 全データ初期化 -->
-        <div class="form-group-block danger-block">
-          <label class="block-label">データリセット:</label>
-          <button type="button" id="btnResetAllData" class="btn-danger-outline-sm">
-            ⚠️ ガチャ履歴を全て初期化
-          </button>
-        </div>
-      </div>
-
-      <!-- フッター: キャンセルボタン & 保存ボタン -->
-      <div class="dialog-footer">
-        <button type="button" id="btnCancelSettings" class="btn-dialog-cancel">
-          キャンセル
-        </button>
-        <button type="button" id="btnSaveSettings" class="btn-dialog-save">
-          設定を保存
-        </button>
-      </div>
-    </div>
-  </dialog>
 
   <!-- ========================================================================= -->
   <!-- 新規生徒アイコン仮登録モーダル（□と〇の切り抜きツール・添付1枚目再現） -->

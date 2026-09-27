@@ -334,13 +334,14 @@ body.theme-tactical-dark .ccharge-bar-track {
 }
 
 /* ==========================================================================
-   2. メインナビゲーションタブ (下の領域と一体化するインデックスフォルダ型UI)
+   2. メインナビゲーションタブ (下の領域と一体化するインデックスフォルダ型UI: 添付3枚目忠実再現)
    ========================================================================== */
 .main-tabs-nav {
   display: flex;
-  gap: 4px;
-  padding: 0 4px;
-  margin-top: 2px;
+  align-items: flex-end;
+  gap: 3px;
+  padding: 0; /* 左端の余白を完全ゼロにし、左枠線と一直線に結合！ */
+  margin-top: 4px;
   margin-bottom: -2.5px; /* 下のコンテンツ枠線と重ねてシームレス結合 */
   position: relative;
   z-index: 10;
@@ -349,21 +350,21 @@ body.theme-tactical-dark .ccharge-bar-track {
 /* 非アクティブタブ: ユーザー要望により暗めの水色にして非アクティブ感を明確化 */
 .nav-tab-btn {
   background: #b9dfee;
-  border: 2px solid #7ebed9;
+  border: 1.5px solid #7ebed9;
   border-bottom: 2.5px solid #00aeef;
   border-radius: 8px 8px 0 0;
   color: #195270;
-  padding: 8px 18px;
-  font-size: 13.5px;
+  padding: 7px 11px;
+  font-size: 12.5px;
   font-weight: 700;
   cursor: pointer;
   transition: all 0.2s ease;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 5px;
   white-space: nowrap;
-  opacity: 0.9;
+  opacity: 0.92;
 }
 
 .nav-tab-btn:hover {
@@ -372,7 +373,7 @@ body.theme-tactical-dark .ccharge-bar-track {
   opacity: 1;
 }
 
-/* アクティブタブ: 添付画像準拠で太い水色の枠線(2.5px)で強調し、下辺を下のカードと直結！ */
+/* アクティブタブ: 添付3枚目準拠で太い水色の枠線(2.5px)で強調し、下辺を下のカードと直結！ */
 .nav-tab-btn.active {
   background: #ffffff;
   border: 2.5px solid #00aeef;
@@ -398,14 +399,8 @@ body.theme-tactical-dark .nav-tab-btn.active {
   color: var(--cyan-bright);
 }
 
-.nav-tab-btn.tab-btn-settings {
-  flex: 0 0 42px;
-  padding: 8px 0;
-  font-size: 15px;
-}
-
 /* ==========================================================================
-   3. メインビューポート & タブコンテンツ (添付画像準拠: 太い水色枠線でアクティブ強調)
+   3. メインビューポート & タブコンテンツ (添付3枚目準拠: 太い水色枠線でアクティブ強調)
    ========================================================================== */
 .app-main-viewport {
   position: relative;
@@ -417,10 +412,12 @@ body.theme-tactical-dark .nav-tab-btn.active {
   flex-direction: column;
   gap: 12px;
   background: #ffffff;
-  border: 2.5px solid #00aeef; /* 添付画像準拠: 太い水色実線でタブと一体化 */
+  border: 2.5px solid #00aeef; /* 添付3枚目準拠: 太い水色実線でタブと一体化 */
   border-radius: 0 10px 10px 10px; /* 左上をタブと結合 */
   padding: 12px 14px;
   box-shadow: var(--shadow-sm);
+  max-height: calc(100vh - 125px);
+  overflow-y: auto;
 }
 
 body.theme-tactical-dark .tab-view-content {
@@ -431,6 +428,29 @@ body.theme-tactical-dark .tab-view-content {
 .tab-view-content.active {
   display: flex;
   animation: fadeIn 0.2s ease-out;
+}
+
+/* 設定タブ内のレイアウト */
+.settings-panel-card {
+  padding: 4px 6px;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+
+.settings-panel-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.settings-actions-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
 }
 
 /* 共通カードデザイン (水色シャーレ) */

@@ -1,10 +1,10 @@
 /**
  * ブルーアーカイブ リアルタイムガチャ集計 (BA Gacha Live Tracker)
- * Version: v1.0.10
+ * Version: v1.0.11
  * Core Application Logic & State Management
  */
 
-const APP_VERSION = 'v1.0.10';
+const APP_VERSION = 'v1.0.11';
 const REMOTE_STUDENT_ICONS_URL = 'https://raw.githubusercontent.com/roundabout-oxygen/ba_gacha_tabulation/main/data/student_icons.json';
 
 // 単発 (1連) モードかどうかのフラグ (false = 10連モード, true = 1連モード)
@@ -398,16 +398,18 @@ function switchTab(tabId) {
 
   if (tabId === 'tabDashboard') {
     updateAllStats();
-    renderHistoryTable();
     renderDirectoryGrid();
     renderConvergenceChart();
   } else if (tabId === 'tabGacha') {
-    // ガチャタブに切り替わった際、シート行が未生成なら自動でセットアップ
     if (!AppState.currentSession.rows || AppState.currentSession.rows.length === 0) {
       setupInputSheet();
     } else {
       applyPullModeUI();
     }
+  } else if (tabId === 'tabHistory') {
+    renderHistoryTable();
+  } else if (tabId === 'tabSettings') {
+    syncSettingsTabInputs();
   }
 }
 
@@ -1684,17 +1686,10 @@ function renderHistoryTable() {
 }
 
 // ==========================================================================
-// ⚙ 設定モーダル（キャンセルボタン付き・仮登録・テーマ・確率・引継ぎ）
+// ⚙ 設定タブ（タブ内インライン表示）
 // ==========================================================================
 
-function openSettingsModal() {
-  const modal = document.getElementById('modalSettings');
-  if (!modal) return;
-
-  // 現在の設定を一時退避（ディープコピー）
-  tempSettingsConfig = JSON.parse(JSON.stringify(AppState.config));
-
-  // UIに反映
+function syncSettingsTabInputs() {
   const rateRadio = AppState.config.rate === 0.06
     ? document.getElementById('settingsRate6')
     : document.getElementById('settingsRate3');
@@ -1704,25 +1699,14 @@ function openSettingsModal() {
   if (initChargeInput) initChargeInput.value = AppState.config.initCharge || 0;
 
   renderSettingsPickupTags();
-
-  modal.showModal();
 }
 
-function cancelSettingsModal() {
-  const modal = document.getElementById('modalSettings');
-  if (!modal) return;
-
-  // 変更破棄: 一時退避から復元
-  if (tempSettingsConfig) {
-    AppState.config = JSON.parse(JSON.stringify(tempSettingsConfig));
-  }
-  modal.close();
+function cancelSettingsFromTab() {
+  syncSettingsTabInputs();
+  switchTab('tabDashboard');
 }
 
-function saveSettingsModal() {
-  const modal = document.getElementById('modalSettings');
-  if (!modal) return;
-
+function saveSettingsFromTab() {
   // 1. 確率
   const rate6 = document.getElementById('settingsRate6');
   AppState.config.rate = (rate6 && rate6.checked) ? 0.06 : 0.03;
@@ -1736,9 +1720,10 @@ function saveSettingsModal() {
     AppState.config.initCharge = val;
   }
 
+  recalculatePullsIndexAndCharge();
   persistState();
   updateAllStats();
-  modal.close();
+  switchTab('tabDashboard');
 }
 
 function renderSettingsPickupTags() {
@@ -1785,11 +1770,7 @@ function initEventListeners() {
   tabBtns.forEach(btn => {
     btn.addEventListener('click', () => {
       const tabId = btn.getAttribute('data-tab');
-      if (tabId === 'tabSettings') {
-        openSettingsModal();
-      } else {
-        switchTab(tabId);
-      }
+      switchTab(tabId);
     });
   });
 
@@ -1849,14 +1830,12 @@ function initEventListeners() {
     });
   }
 
-  // 4. 設定モーダル
-  const btnCloseX = document.getElementById('btnCloseSettingsX');
+  // 4. 設定タブ操作ボタン
   const btnCancel = document.getElementById('btnCancelSettings');
   const btnSave = document.getElementById('btnSaveSettings');
 
-  if (btnCloseX) btnCloseX.addEventListener('click', cancelSettingsModal);
-  if (btnCancel) btnCancel.addEventListener('click', cancelSettingsModal);
-  if (btnSave) btnSave.addEventListener('click', saveSettingsModal);
+  if (btnCancel) btnCancel.addEventListener('click', cancelSettingsFromTab);
+  if (btnSave) btnSave.addEventListener('click', saveSettingsFromTab);
 
   // ピックアップ追加
   const btnAddPu = document.getElementById('btnSettingsAddPickup');
@@ -1917,8 +1896,8 @@ function initEventListeners() {
         renderHistoryTable();
         renderDirectoryGrid();
         renderConvergenceChart();
-        setupInputSheet(10);
-        document.getElementById('modalSettings').close();
+        setupInputSheet();
+        switchTab('tabDashboard');
       }
     });
   }
