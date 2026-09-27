@@ -341,17 +341,18 @@ body.theme-tactical-dark .ccharge-bar-track {
   gap: 4px;
   padding: 0 4px;
   margin-top: 2px;
-  margin-bottom: -1.5px; /* 下のコンテンツ枠線と重ねてシームレス結合 */
+  margin-bottom: -2.5px; /* 下のコンテンツ枠線と重ねてシームレス結合 */
   position: relative;
   z-index: 10;
 }
 
+/* 非アクティブタブ: ユーザー要望により暗めの水色にして非アクティブ感を明確化 */
 .nav-tab-btn {
-  background: rgba(0, 174, 239, 0.08);
-  border: 1.5px solid var(--border-strong);
-  border-bottom: 1.5px solid var(--border-strong);
-  border-radius: 8px 8px 0 0; /* 上部角丸のフォルダインデックス形状 */
-  color: var(--text-muted);
+  background: #b9dfee;
+  border: 2px solid #7ebed9;
+  border-bottom: 2.5px solid #00aeef;
+  border-radius: 8px 8px 0 0;
+  color: #195270;
   padding: 8px 18px;
   font-size: 13.5px;
   font-weight: 700;
@@ -362,32 +363,38 @@ body.theme-tactical-dark .ccharge-bar-track {
   justify-content: center;
   gap: 6px;
   white-space: nowrap;
+  opacity: 0.9;
 }
 
 .nav-tab-btn:hover {
-  background: rgba(0, 174, 239, 0.15);
-  color: var(--primary-dark);
+  background: #a3d4ea;
+  color: #0d3b53;
+  opacity: 1;
 }
 
-/* アクティブタブ: 下辺を開放して下のカードと完全に一体化！ */
+/* アクティブタブ: 添付画像準拠で太い水色の枠線(2.5px)で強調し、下辺を下のカードと直結！ */
 .nav-tab-btn.active {
   background: #ffffff;
-  border-color: var(--border-strong);
-  border-bottom: 2px solid #ffffff; /* 下辺を透過させて下の白背景と直結！ */
-  color: var(--primary-dark);
+  border: 2.5px solid #00aeef;
+  border-bottom: 3.5px solid #ffffff; /* 下辺を透過させて下の白背景と直結！ */
+  color: #00729c;
   font-weight: 800;
-  box-shadow: 0 -3px 10px rgba(0, 174, 239, 0.08);
+  box-shadow: 0 -4px 14px rgba(0, 174, 239, 0.18);
+  opacity: 1;
+  z-index: 15;
 }
 
 body.theme-tactical-dark .nav-tab-btn {
-  background: rgba(0, 174, 239, 0.1);
-  border-color: rgba(0, 174, 239, 0.3);
+  background: #11283c;
+  border-color: #1a4362;
+  border-bottom: 2.5px solid #00aeef;
+  color: #79a8c7;
 }
 
 body.theme-tactical-dark .nav-tab-btn.active {
   background: #141f2e;
-  border-color: var(--border-strong);
-  border-bottom: 2px solid #141f2e;
+  border: 2.5px solid #00aeef;
+  border-bottom: 3.5px solid #141f2e;
   color: var(--cyan-bright);
 }
 
@@ -398,7 +405,7 @@ body.theme-tactical-dark .nav-tab-btn.active {
 }
 
 /* ==========================================================================
-   3. メインビューポート & タブコンテンツ (フォルダの本体領域)
+   3. メインビューポート & タブコンテンツ (添付画像準拠: 太い水色枠線でアクティブ強調)
    ========================================================================== */
 .app-main-viewport {
   position: relative;
@@ -410,7 +417,7 @@ body.theme-tactical-dark .nav-tab-btn.active {
   flex-direction: column;
   gap: 12px;
   background: #ffffff;
-  border: 1.5px solid var(--border-strong);
+  border: 2.5px solid #00aeef; /* 添付画像準拠: 太い水色実線でタブと一体化 */
   border-radius: 0 10px 10px 10px; /* 左上をタブと結合 */
   padding: 12px 14px;
   box-shadow: var(--shadow-sm);
@@ -418,7 +425,7 @@ body.theme-tactical-dark .nav-tab-btn.active {
 
 body.theme-tactical-dark .tab-view-content {
   background: #141f2e;
-  border-color: var(--border-strong);
+  border-color: #00aeef;
 }
 
 .tab-view-content.active {
@@ -452,16 +459,17 @@ body.theme-tactical-dark .cyan-card {
   width: 100%;
 }
 
-.three-star-grid-3cols {
+.three-star-grid-3cols,
+.three-star-grid-4cols {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
 }
 
-/* 生徒カード (添付2枚目忠実再現) */
+/* 生徒カード (横4人対応・省スペース) */
 .three-star-item-card {
-  border-radius: 8px;
-  padding: 8px 6px;
+  border-radius: 7px;
+  padding: 6px 3px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -520,9 +528,9 @@ body.theme-tactical-dark .three-star-item-card.border-regular {
 /* アイコンラッパー */
 .ts-card-avatar-wrap {
   position: relative;
-  width: 46px;
-  height: 46px;
-  margin-bottom: 5px;
+  width: 38px;
+  height: 38px;
+  margin-bottom: 3px;
 }
 
 .ts-card-avatar {
@@ -538,15 +546,15 @@ body.theme-tactical-dark .three-star-item-card.border-regular {
 /* 2回目・3回目バッジ (添付2枚目忠実再現: アイコン右肩の黒バッジ) */
 .ts-card-count-badge {
   position: absolute;
-  top: -2px;
-  right: -6px;
+  top: -3px;
+  right: -5px;
   background: #1f2937;
   color: #ffffff;
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: 8px;
   font-weight: 700;
-  padding: 1px 4px;
-  border-radius: 8px;
+  padding: 0 3px;
+  border-radius: 6px;
   border: 1px solid #ffffff;
   white-space: nowrap;
   line-height: 1.2;
@@ -554,10 +562,10 @@ body.theme-tactical-dark .three-star-item-card.border-regular {
 
 /* 生徒名 */
 .ts-card-name {
-  font-size: 11.5px;
+  font-size: 10.5px;
   font-weight: 800;
   color: var(--text-main);
-  line-height: 1.25;
+  line-height: 1.2;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -566,11 +574,11 @@ body.theme-tactical-dark .three-star-item-card.border-regular {
 
 /* 種別テキスト (添付2枚目準拠: ピックアップ, 新規獲得, すり抜け(被り), 交換) */
 .ts-card-type-text {
-  font-size: 10px;
+  font-size: 8.5px;
   font-weight: 700;
   color: var(--text-muted);
-  line-height: 1.2;
-  margin-top: 2px;
+  line-height: 1.15;
+  margin-top: 1px;
   white-space: nowrap;
 }
 
@@ -1265,40 +1273,61 @@ body.theme-tactical-dark .sheet-student-input.is-pickup {
   box-shadow: 0 2px 6px rgba(245, 158, 11, 0.3);
 }
 
-/* シート操作ボタンバー (キャンセル / 1連に切替 / 確定 / 次へ) */
-.sheet-control-actions {
+/* シート操作ボタンバー (2行構成) */
+.sheet-control-actions-2rows {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
+  flex-direction: column;
+  gap: 6px;
   padding-top: 6px;
-  gap: 5px;
-  flex-wrap: nowrap;
   width: 100%;
 }
 
-.sheet-left-btns {
-  display: flex;
+/* 1行目: ◁ 前の10連へ | 1連に切替 | 次の10連へ ▶ */
+.sheet-action-row-top {
+  display: grid;
+  grid-template-columns: 1.15fr 0.9fr 1.15fr;
   gap: 5px;
   align-items: center;
 }
 
-/* キャンセルボタン */
-.btn-sheet-cancel {
-  background: transparent;
-  border: 1.5px solid rgba(239, 68, 68, 0.45);
-  color: #ef4444;
-  padding: 6px 10px;
+/* 2行目: この10連を削除 | ✔ 確定して集計へ */
+.sheet-action-row-bottom {
+  display: grid;
+  grid-template-columns: 1fr 1.25fr;
+  gap: 6px;
+  align-items: center;
+}
+
+/* ◁ 前の10連へ ボタン */
+.btn-action-prev {
+  background: rgba(0, 174, 239, 0.08);
+  border: 1.5px solid var(--border-glow);
+  color: var(--primary-dark);
+  padding: 7px 6px;
   font-size: 11.5px;
   font-weight: 700;
   border-radius: var(--radius-sm);
   cursor: pointer;
   transition: var(--transition);
+  text-align: center;
   white-space: nowrap;
 }
 
-.btn-sheet-cancel:hover {
-  background: rgba(239, 68, 68, 0.1);
-  border-color: #ef4444;
+body.theme-tactical-dark .btn-action-prev {
+  background: rgba(0, 174, 239, 0.15);
+  color: var(--cyan-bright);
+}
+
+.btn-action-prev:hover {
+  background: rgba(0, 174, 239, 0.2);
+  border-color: var(--primary);
+  box-shadow: 0 2px 8px rgba(0, 174, 239, 0.25);
+}
+
+.btn-action-prev:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  pointer-events: none;
 }
 
 /* 1連・10連切替ボタン */
@@ -1306,12 +1335,13 @@ body.theme-tactical-dark .sheet-student-input.is-pickup {
   background: rgba(0, 174, 239, 0.08);
   border: 1.5px solid var(--border-glow);
   color: var(--primary-dark);
-  padding: 6px 11px;
+  padding: 7px 4px;
   font-size: 11.5px;
   font-weight: 800;
   border-radius: var(--radius-sm);
   cursor: pointer;
   transition: var(--transition);
+  text-align: center;
   white-space: nowrap;
 }
 
@@ -1333,49 +1363,74 @@ body.theme-tactical-dark .btn-toggle-count {
   box-shadow: var(--shadow-neon);
 }
 
-.sheet-right-btns {
-  display: flex;
-  gap: 5px;
-  align-items: center;
-}
-
-.btn-green-submit {
-  background: var(--success);
-  border: none;
-  color: #ffffff;
-  padding: 6px 11px;
-  font-size: 11.5px;
-  font-weight: 800;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.25);
-  transition: var(--transition);
-  white-space: nowrap;
-}
-
-.btn-green-submit:hover {
-  background: #0ea371;
-  box-shadow: 0 4px 14px rgba(16, 185, 129, 0.4);
-  transform: translateY(-1px);
-}
-
-.btn-cyan-next {
+/* 次の10連へ ▶ ボタン */
+.btn-action-next {
   background: var(--primary);
   border: none;
   color: #ffffff;
-  padding: 6px 11px;
+  padding: 7px 6px;
   font-size: 11.5px;
   font-weight: 800;
   border-radius: var(--radius-sm);
   cursor: pointer;
   box-shadow: var(--shadow-neon);
   transition: var(--transition);
+  text-align: center;
   white-space: nowrap;
 }
 
-.btn-cyan-next:hover {
+.btn-action-next:hover {
   background: var(--primary-dark);
   box-shadow: 0 4px 16px rgba(0, 174, 239, 0.4);
+  transform: translateY(-1px);
+}
+
+/* この10連を削除 ボタン */
+.btn-action-delete {
+  background: rgba(239, 68, 68, 0.08);
+  border: 1.5px solid rgba(239, 68, 68, 0.5);
+  color: #ef4444;
+  padding: 7px 8px;
+  font-size: 11.5px;
+  font-weight: 700;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: var(--transition);
+  text-align: center;
+  white-space: nowrap;
+}
+
+.btn-action-delete:hover {
+  background: rgba(239, 68, 68, 0.18);
+  border-color: #ef4444;
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.25);
+}
+
+.btn-action-delete:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* ✔ 確定して集計へ ボタン */
+.btn-action-submit {
+  background: var(--success);
+  border: none;
+  color: #ffffff;
+  padding: 7px 10px;
+  font-size: 12px;
+  font-weight: 800;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.25);
+  transition: var(--transition);
+  text-align: center;
+  white-space: nowrap;
+}
+
+.btn-action-submit:hover {
+  background: #0ea371;
+  box-shadow: 0 4px 14px rgba(16, 185, 129, 0.4);
   transform: translateY(-1px);
 }
 

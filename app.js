@@ -4,7 +4,7 @@
  * Core Application Logic & State Management
  */
 
-const APP_VERSION = 'v1.0.8';
+const APP_VERSION = 'v1.0.9';
 const REMOTE_STUDENT_ICONS_URL = 'https://raw.githubusercontent.com/roundabout-oxygen/ba_gacha_tabulation/main/data/student_icons.json';
 
 // 単発 (1連) モードかどうかのフラグ (false = 10連モード, true = 1連モード)
@@ -29,7 +29,8 @@ const AppState = {
   // 現在の入力シートセッション
   currentSession: {
     pullCount: 10,
-    rows: []
+    rows: [],
+    editingBatchId: null // 再編集中のバッチID (null のときは新規引き)
   },
 
   // Chart.js インスタンス
@@ -430,13 +431,30 @@ function calculateCurrentCharge() {
 }
 
 // ==========================================================================
-// 作戦記録シート (タブ2: ガチャを引く)
+// 作戦記録シート (タブ2: ガチャを引く) & バッチ再編集・削除
 // ==========================================================================
 
 /**
+ * pulls 内のバッチID一覧を時系列順に取得
+ */
+function getAllBatches() {
+  const batches = [];
+  const seen = new Set();
+  AppState.pulls.forEach(p => {
+    if (p.batchId && !seen.has(p.batchId)) {
+      seen.add(p.batchId);
+      batches.push(p.batchId);
+    }
+  });
+  return batches;
+}
+
+/**
  * 入力シートの初期セットアップ (常に10行生成し、1連モード時は2〜10連目をグレーアウト)
+ * 新規入力セッションを開始
  */
 function setupInputSheet() {
+  AppState.currentSession.editingBatchId = null;
   AppState.currentSession.pullCount = isSinglePullMode ? 1 : 10;
   const currentTotal = AppState.pulls.length;
   let runningCharge = calculateCurrentCharge();
@@ -467,13 +485,151 @@ function setupInputSheet() {
 }
 
 /**
- * 1連モード・10連モードのUI反映
- * 1連モード時: 2〜10連目がグレーアウトし、1連目のみ入力可能
+ * 全 pull の totalPullIndex と charge を時系列順に再計算して整合性を維持
+ */
+function recalculatePullsIndexAndCharge() {
+  let runningCharge = Number(AppState.config.initCharge) || 0;
+  AppState.pulls.forEach((p, idx) => {
+    p.totalPullIndex = idx + 1;
+    runningCharge += 1;
+    p.charge = runningCharge;
+    if (p.isPick) {
+      runningCharge = 0;
+    }
+  });
+}
+
+/**
+ * 指定した batchId のデータをシートに読み込む
+ */
+function loadBatchById(targetBatchId) {
+  if (!targetBatchId) return;
+
+  const batchPulls = AppState.pulls.filter(p => p.batchId === targetBatchId);
+  if (batchPulls.length === 0) return;
+
+  AppState.currentSession.editingBatchId = targetBatchId;
+  AppState.currentSession.pullCount = batchPulls.length;
+  isSinglePullMode = (batchPulls.length === 1);
+
+  // シート行構築 (常に10行)
+  const rows = [];
+  for (let i = 0; i < 10; i++) {
+    const pullData = batchPulls[i];
+    if (pullData) {
+      rows.push({
+        seq: pullData.seqInBatch || (i + 1),
+        total: pullData.totalPullIndex,
+        charge: pullData.charge,
+        studentName: pullData.studentName || '',
+        isPick: Boolean(pullData.isPick),
+        isNew: Boolean(pullData.isNew),
+        isGuaranteed50: Boolean(pullData.isGuaranteed50),
+        isGuaranteed100: Boolean(pullData.isGuaranteed100)
+      });
+    } else {
+      rows.push({
+        seq: i + 1,
+        total: (batchPulls[0] ? batchPulls[0].totalPullIndex + i : i + 1),
+        charge: (batchPulls[0] ? batchPulls[0].charge + i : i + 1),
+        studentName: '',
+        isPick: false,
+        isNew: false,
+        isGuaranteed50: false,
+        isGuaranteed100: false
+      });
+    }
+  }
+
+  AppState.currentSession.rows = rows;
+  renderInputSheetTable();
+}
+
+/**
+ * 「◁ 前の10連へ」: 前の引きをシートに呼び戻して再編集可能にする
+ */
+function loadPreviousBatch() {
+  const batches = getAllBatches();
+  if (batches.length === 0) return;
+
+  let targetBatchId = null;
+  const currentEditingId = AppState.currentSession.editingBatchId;
+
+  if (!currentEditingId) {
+    // 現在新規引き入力中の場合: 最後のバッチへ
+    targetBatchId = batches[batches.length - 1];
+  } else {
+    // すでに過去のバッチを編集中: さらに1つ前のバッチへ
+    const currentIdx = batches.indexOf(currentEditingId);
+    if (currentIdx > 0) {
+      targetBatchId = batches[currentIdx - 1];
+    } else {
+      return; // 最古のバッチ
+    }
+  }
+
+  if (targetBatchId) {
+    loadBatchById(targetBatchId);
+  }
+}
+
+/**
+ * 「この10連を削除」: 表示されているバッチを履歴から削除し、前の引きに戻る
+ */
+function deleteCurrentBatch() {
+  const batches = getAllBatches();
+  if (batches.length === 0 && !AppState.currentSession.editingBatchId) return;
+
+  let targetBatchId = AppState.currentSession.editingBatchId;
+  if (!targetBatchId) {
+    // 新規入力中なら直前のバッチを削除
+    targetBatchId = batches[batches.length - 1];
+  }
+
+  if (!targetBatchId) return;
+
+  // 対象バッチの削除
+  AppState.pulls = AppState.pulls.filter(p => p.batchId !== targetBatchId);
+  recalculatePullsIndexAndCharge();
+  persistState();
+  updateAllStats();
+  renderHistoryTable();
+  renderDirectoryGrid();
+  renderConvergenceChart();
+
+  // 削除後の再表示: 残りのバッチがあれば直前を表示、なければ新規初期化
+  const remainingBatches = getAllBatches();
+  if (remainingBatches.length > 0) {
+    AppState.currentSession.editingBatchId = null;
+    loadPreviousBatch();
+  } else {
+    AppState.currentSession.editingBatchId = null;
+    setupInputSheet();
+  }
+}
+
+/**
+ * 1連モード・10連モードのUI反映 ＆ ボタン状態更新
  */
 function applyPullModeUI() {
+  const btnPrev = document.getElementById('btnPrevPull');
   const btnToggle = document.getElementById('btnTogglePullCount');
   const btnNext = document.getElementById('btnSheetSubmitNext');
+  const btnDelete = document.getElementById('btnDeleteCurrentPull');
   const tbody = document.getElementById('gachaSheetTbody');
+
+  const batches = getAllBatches();
+  const currentEditingId = AppState.currentSession.editingBatchId;
+
+  // ボタンテキスト更新 (1連モード時は「前の1連へ」「この1連を削除」「次の1連へ」に連動)
+  if (btnPrev) {
+    btnPrev.textContent = isSinglePullMode ? '◁ 前の1連へ' : '◁ 前の10連へ';
+    if (batches.length === 0 || (currentEditingId && batches.indexOf(currentEditingId) === 0)) {
+      btnPrev.disabled = true;
+    } else {
+      btnPrev.disabled = false;
+    }
+  }
 
   if (btnToggle) {
     btnToggle.textContent = isSinglePullMode ? '10連に切替' : '1連に切替';
@@ -486,6 +642,15 @@ function applyPullModeUI() {
 
   if (btnNext) {
     btnNext.textContent = isSinglePullMode ? '次の1連へ ▶' : '次の10連へ ▶';
+  }
+
+  if (btnDelete) {
+    btnDelete.textContent = isSinglePullMode ? 'この1連を削除' : 'この10連を削除';
+    if (batches.length === 0 && !currentEditingId) {
+      btnDelete.disabled = true;
+    } else {
+      btnDelete.disabled = false;
+    }
   }
 
   if (!tbody) return;
@@ -891,31 +1056,71 @@ function commitCurrentSheet() {
   const rows = AppState.currentSession.rows;
   if (!rows || rows.length === 0) return;
 
-  const batchId = 'batch_' + Date.now();
   const pullType = isSinglePullMode ? '1' : '10';
   const targetRows = isSinglePullMode ? [rows[0]] : rows;
+  const editingBatchId = AppState.currentSession.editingBatchId;
 
-  targetRows.forEach(r => {
-    const isThreeStar = Boolean(r.studentName && r.studentName.trim());
-    AppState.pulls.push({
-      id: AppState.pulls.length + 1,
-      pullType: pullType,
-      batchId: batchId,
-      seqInBatch: r.seq,
-      totalPullIndex: r.total,
-      charge: r.charge,
-      studentName: r.studentName ? normalizeStudentName(r.studentName) : '',
-      isThreeStar: isThreeStar,
-      isPick: Boolean(r.isPick),
-      isNew: Boolean(r.isNew),
-      isGuaranteed50: Boolean(r.isGuaranteed50),
-      isGuaranteed100: Boolean(r.isGuaranteed100),
-      createdAt: new Date().toISOString()
+  if (editingBatchId) {
+    // 既存バッチの再編集・上書き
+    const firstIdx = AppState.pulls.findIndex(p => p.batchId === editingBatchId);
+    if (firstIdx !== -1) {
+      const existingInBatch = AppState.pulls.filter(p => p.batchId === editingBatchId);
+      const originalCount = existingInBatch.length;
+      const createdAt = existingInBatch[0] ? existingInBatch[0].createdAt : new Date().toISOString();
+
+      const updatedPulls = targetRows.map((r, i) => {
+        const isThreeStar = Boolean(r.studentName && r.studentName.trim());
+        return {
+          id: existingInBatch[i] ? existingInBatch[i].id : (AppState.pulls.length + i + 1),
+          pullType: pullType,
+          batchId: editingBatchId,
+          seqInBatch: r.seq,
+          totalPullIndex: r.total,
+          charge: r.charge,
+          studentName: r.studentName ? normalizeStudentName(r.studentName) : '',
+          isThreeStar: isThreeStar,
+          isPick: Boolean(r.isPick),
+          isNew: Boolean(r.isNew),
+          isGuaranteed50: Boolean(r.isGuaranteed50),
+          isGuaranteed100: Boolean(r.isGuaranteed100),
+          createdAt: createdAt
+        };
+      });
+
+      AppState.pulls.splice(firstIdx, originalCount, ...updatedPulls);
+    }
+  } else {
+    // 新規バッチ追加
+    const batchId = 'batch_' + Date.now();
+    targetRows.forEach(r => {
+      const isThreeStar = Boolean(r.studentName && r.studentName.trim());
+      AppState.pulls.push({
+        id: AppState.pulls.length + 1,
+        pullType: pullType,
+        batchId: batchId,
+        seqInBatch: r.seq,
+        totalPullIndex: r.total,
+        charge: r.charge,
+        studentName: r.studentName ? normalizeStudentName(r.studentName) : '',
+        isThreeStar: isThreeStar,
+        isPick: Boolean(r.isPick),
+        isNew: Boolean(r.isNew),
+        isGuaranteed50: Boolean(r.isGuaranteed50),
+        isGuaranteed100: Boolean(r.isGuaranteed100),
+        createdAt: new Date().toISOString()
+      });
     });
-  });
+  }
 
+  // 編集モードをリセット
+  AppState.currentSession.editingBatchId = null;
+
+  recalculatePullsIndexAndCharge();
   persistState();
   updateAllStats();
+  renderHistoryTable();
+  renderDirectoryGrid();
+  renderConvergenceChart();
 }
 
 // ==========================================================================
@@ -1403,16 +1608,16 @@ function initEventListeners() {
     });
   });
 
-  // 2. シート確定・キャンセル・1連/10連切替ボタン
-  const btnCancelSheet = document.getElementById('btnSheetCancel') || document.getElementById('btnSheetBack');
+  // 2. シート操作ボタン（2行構成: 1行目=前の10連/1連切替/次の10連, 2行目=この10連削除/確定）
+  const btnPrevPull = document.getElementById('btnPrevPull');
   const btnToggleCount = document.getElementById('btnTogglePullCount');
-  const btnSubmitOk = document.getElementById('btnSheetSubmitOk');
   const btnSubmitNext = document.getElementById('btnSheetSubmitNext');
+  const btnDeleteCurrent = document.getElementById('btnDeleteCurrentPull');
+  const btnSubmitOk = document.getElementById('btnSheetSubmitOk');
 
-  if (btnCancelSheet) {
-    btnCancelSheet.addEventListener('click', () => {
-      setupInputSheet();
-      switchTab('tabDashboard');
+  if (btnPrevPull) {
+    btnPrevPull.addEventListener('click', () => {
+      loadPreviousBatch();
     });
   }
 
@@ -1423,18 +1628,39 @@ function initEventListeners() {
     });
   }
 
+  if (btnSubmitNext) {
+    btnSubmitNext.addEventListener('click', () => {
+      const currentEditingId = AppState.currentSession.editingBatchId;
+      commitCurrentSheet();
+      if (currentEditingId) {
+        const batches = getAllBatches();
+        const currentIdx = batches.indexOf(currentEditingId);
+        if (currentIdx !== -1 && currentIdx < batches.length - 1) {
+          loadBatchById(batches[currentIdx + 1]);
+          return;
+        }
+      }
+      setupInputSheet();
+    });
+  }
+
+  if (btnDeleteCurrent) {
+    btnDeleteCurrent.addEventListener('click', () => {
+      const isSingle = isSinglePullMode;
+      const confirmMsg = isSingle
+        ? '表示中の1連を削除して前の引きに戻しますか？（累計・チャージも巻き戻ります）'
+        : '表示中の10連を削除して前の10連に戻しますか？（累計・チャージも巻き戻ります）';
+      if (confirm(confirmMsg)) {
+        deleteCurrentBatch();
+      }
+    });
+  }
+
   if (btnSubmitOk) {
     btnSubmitOk.addEventListener('click', () => {
       commitCurrentSheet();
       setupInputSheet();
       switchTab('tabDashboard');
-    });
-  }
-
-  if (btnSubmitNext) {
-    btnSubmitNext.addEventListener('click', () => {
-      commitCurrentSheet();
-      setupInputSheet();
     });
   }
 

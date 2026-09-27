@@ -26,7 +26,7 @@
           <div class="brand-logo-icon">G</div>
           <div class="brand-titles">
             <h1 class="brand-name">シャーレ ガチャ集計</h1>
-            <span class="version-badge" id="appVersionBadge">v1.0.8</span>
+            <span class="version-badge" id="appVersionBadge">v1.0.9</span>
           </div>
         </div>
         <div class="header-right-tools">
@@ -113,7 +113,7 @@
       <section class="tab-view-content active" id="tabDashboard">
         <!-- 排出された☆３生徒一覧（添付2枚目再現・横3列・古い順・日付なし・タイトルなしで省スペース） -->
         <div class="three-star-section-box" id="threeStarSectionBox">
-          <div class="three-star-grid-3cols" id="threeStarCardsGrid">
+          <div class="three-star-grid-4cols" id="threeStarCardsGrid">
             <div class="empty-hint" id="threeStarEmptyHint">まだ☆3生徒は排出されていません</div>
           </div>
         </div>
@@ -213,22 +213,28 @@
             </table>
           </div>
 
-          <!-- シート操作ボタンバー (キャンセル / 1連に切替 / 確定 / 次へ) -->
-          <div class="sheet-control-actions">
-            <div class="sheet-left-btns">
-              <button id="btnSheetCancel" class="btn-sheet-cancel" title="入力を破棄して集計画面へ戻る">
-                キャンセル
+          <!-- シート操作ボタンバー (2行構成: 1行目=前の10連/1連切替/次の10連, 2行目=この10連削除/確定) -->
+          <div class="sheet-control-actions-2rows">
+            <!-- 1行目: ◁ 前の10連へ | 1連に切替 | 次の10連へ ▶ -->
+            <div class="sheet-action-row-top">
+              <button id="btnPrevPull" class="btn-cyan-outline btn-action-prev" title="前の10連を再編集する">
+                ◁ 前の10連へ
               </button>
               <button id="btnTogglePullCount" class="btn-toggle-count" title="1連入力と10連入力を切り替える">
                 1連に切替
               </button>
-            </div>
-            <div class="sheet-right-btns">
-              <button id="btnSheetSubmitOk" class="btn-green-submit">
-                ✔ 確定して集計へ
-              </button>
-              <button id="btnSheetSubmitNext" class="btn-cyan-next">
+              <button id="btnSheetSubmitNext" class="btn-cyan-next btn-action-next" title="入力を確定して次の10連へ進む">
                 次の10連へ ▶
+              </button>
+            </div>
+
+            <!-- 2行目: この10連を削除 | ✔ 確定して集計へ -->
+            <div class="sheet-action-row-bottom">
+              <button id="btnDeleteCurrentPull" class="btn-danger-outline btn-action-delete" title="現在表示されている10連を履歴から削除して前の10連に戻る">
+                この10連を削除
+              </button>
+              <button id="btnSheetSubmitOk" class="btn-green-submit btn-action-submit" title="入力を確定して集計画面へ進む">
+                ✔ 確定して集計へ
               </button>
             </div>
           </div>
