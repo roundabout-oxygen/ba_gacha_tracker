@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ブルアカ リアルタイムガチャ集計 | BA Gacha Live Tracker</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='46' fill='%2300aeef'/><text x='50' y='63' font-size='42' font-family='sans-serif' font-weight='bold' fill='white' text-anchor='middle'>BA</text></svg>">
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="theme-ba">
+
+  <!-- ========================================================================= -->
+  <!-- トップ固定ヘッダー（統計ステータスバー：全画面・入力中・配信中いつでも常時表示） -->
+  <!-- ========================================================================= -->
+  <header class="app-header" id="appHeader">
+    <div class="header-container">
+      <!-- アプリロゴ ＆ バージョン -->
+      <div class="brand-area">
+        <div class="brand-icon">
+          <svg viewBox="0 0 32 32" width="24" height="24">
+            <circle cx="16" cy="16" r="14" fill="#00aeef" />
+            <path d="M10 16 L14 20 L22 12" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none" />
+          </svg>
+        </div>
+        <div class="brand-text">
+          <div class="brand-title">BA Gacha Live <span class="app-version-badge" id="appVersionBadge">v1.0.1</span></div>
+          <div class="brand-sub" id="headerGachaModeText">3% 通常募集</div>
+        </div>
+      </div>
+
+      <!-- 統計サマリーステータスバー（常時表示項目） -->
+      <div class="stats-live-bar" id="statsLiveBar">
+        <!-- 総ガチャ回数 -->
+        <div class="stat-pill" title="総ガチャ回数と消費青輝石">
+          <span class="pill-label">総ガチャ回数</span>
+          <div class="pill-value"><span id="liveStatTotalPulls">0</span> <span class="unit">連</span></div>
+          <span class="pill-sub">消費: <b id="liveStatPyroxene">0</b> 石</span>
+        </div>
+
+        <!-- ☆3確率（3%または6%の選択中モードのみ表示） -->
+        <div class="stat-pill" id="livePillThreeStar" title="☆3生徒の実測排出率">
+          <span class="pill-label" id="liveThreeStarLabel">☆3確率 (3%枠)</span>
+          <div class="pill-value"><span id="liveStatThreeStarRate">0.00</span> <span class="unit">%</span></div>
+          <span class="pill-sub" id="liveThreeStarSub">獲得: <b id="liveStatThreeStarCount">0</b>人 (<span id="liveStatThreeStarDiff">+0.0</span>)</span>
+        </div>
+
+        <!-- ピックアップ確率 -->
+        <div class="stat-pill" title="ピックアップ生徒の実測排出率">
+          <span class="pill-label">ピックアップ確率</span>
+          <div class="pill-value highlight-pickup"><span id="liveStatPickupRate">0.00</span> <span class="unit">%</span></div>
+          <span class="pill-sub">獲得: <b id="liveStatPickupCount">0</b>人 (期待: <span id="liveStatPickupExpected">0.0</span>人)</span>
+        </div>
+
+        <!-- 50%枠勝率 (100連目仮天井勝率) -->
+        <div class="stat-pill" title="100連目50%枠の勝率">
+          <span class="pill-label">50%枠勝率 (100連目)</span>
+          <div class="pill-value highlight-win"><span id="liveStatWinRate">0.0</span> <span class="unit">%</span></div>
+          <span class="pill-sub"><b id="liveStatWinCount">0</b>勝 <b id="liveStatLossCount">0</b>敗 (計 <span id="liveStatFiftyTotal">0</span>回)</span>
+        </div>
+
+        <!-- 現在のチャージ -->
+        <div class="stat-pill charge-pill" id="livePillCharge" title="現在のチャージ数">
+          <div class="charge-header">
+            <span class="pill-label">チャージ</span>
+            <span class="charge-text" id="liveStatChargeText">0 / 100</span>
+          </div>
+          <div class="charge-progress-bar">
+            <div class="charge-progress-fill" id="liveChargeProgressFill" style="width: 0%;"></div>
+          </div>
+          <span class="pill-sub" id="liveChargeSub">100連まであと 100連</span>
+        </div>
+      </div>
+
+      <!-- ヘッダー右側アクションボタン -->
+      <div class="header-actions">
+        <button id="btnPull1" class="btn-action btn-pull1" title="1連ガチャを入力">
+          <span class="btn-icon">⚡</span> 1連
+        </button>
+        <button id="btnPull10" class="btn-action btn-pull10" title="10連ガチャを入力">
+          <span class="btn-icon">✨</span> 10連
+        </button>
+        <button id="btnNavDashboard" class="btn-action btn-secondary" title="集計ダッシュボードへ">
+          📊 集計
+        </button>
+        <button id="btnOpenCustomModal" class="btn-action btn-secondary" title="新規生徒アイコン仮登録">
+          ➕ 仮登録
+        </button>
+        <button id="btnToggleStreamMode" class="btn-action btn-stream" title="配信・OBSオーバーレイ表示切替">
+          🎥 配信UI
+        </button>
+        <button id="btnOpenSettings" class="btn-icon-only" title="ガチャ設定">
+          ⚙️
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ========================================================================= -->
+  <!-- メインコンテンツ領域 -->
+  <!-- ========================================================================= -->
+  <main class="main-content" id="mainContent">
+
+    <!-- ----------------------------------------------------------------------- -->
+    <!-- 画面1: ガチャ開始前・ウェルカム画面（初回または設定リセット時） -->
+    <!-- ----------------------------------------------------------------------- -->
+    <section class="view-panel" id="viewWelcome">
+      <div class="welcome-card">
+        <div class="welcome-header">
+          <div class="welcome-logo-badge">SCHALE</div>
+          <h2>ブルーアーカイブ リアルタイムガチャ集計</h2>
+          <p class="welcome-desc">ガチャをリアルタイムに引いてスプレッドシート形式で記録＆自動集計。配信や実況にも最適な高機能ダッシュボードです。</p>
+        </div>
+
+        <div class="setup-form-box">
+          <h3>🎯 ガチャ初期設定</h3>
+          
+          <div class="form-row">
+            <label class="form-label">ガチャ枠の確率:</label>
+            <div class="segmented-control">
+              <label class="segment-opt">
+                <input type="radio" name="gachaRateRadio" value="0.03" checked>
+                <span class="segment-btn">通常募集 (☆3: 3%)</span>
+              </label>
+              <label class="segment-opt">
+                <input type="radio" name="gachaRateRadio" value="0.06">
+                <span class="segment-btn fest-btn">周年・フェス募集 (☆3: 6%)</span>
+              </label>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <label class="form-label" for="initChargeInput">
+              ガチャのチャージ引継:
+              <span class="label-hint">※前回の募集から引き継いだチャージ数（0〜199）</span>
+            </label>
+            <div class="input-with-badge">
+              <input type="number" id="initChargeInput" class="form-input" min="0" max="199" value="0">
+              <span class="input-badge">連分チャージ済</span>
+            </div>
+            <p class="charge-rule-note">
+              💡 <b>チャージ仕様</b>: ガチャ1回ごとに+1。<b>100</b>になると☆3確定＆50%でピックアップ生徒排出。<b>200</b>になると100%排出。ピックアップを引いた場合は普通でも100/200でもチャージがリセットされます。
+            </p>
+          </div>
+
+          <div class="form-row">
+            <label class="form-label" for="pickupStudentInput">
+              ピックアップ対象生徒:
+              <span class="label-hint">※入力すると入力時に自動で「pick」にチェックが入ります（複数可）</span>
+            </label>
+            <div class="pickup-tags-wrap" id="pickupTagsWrap">
+              <!-- 設定されたPU生徒タグ -->
+            </div>
+            <div class="autocomplete-wrapper">
+              <input type="text" id="pickupStudentInput" class="form-input" placeholder="生徒名を入力して候補から選択、または直接追加..." autocomplete="off">
+              <button type="button" id="btnAddPickupStudent" class="btn-inline-add">追加</button>
+              <div id="pickupSuggestDropdown" class="student-suggest-dropdown"></div>
+            </div>
+          </div>
+
+          <div class="setup-actions">
+            <button id="btnStartGacha" class="btn-primary-large">
+              🚀 ガチャ集計を開始する
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ----------------------------------------------------------------------- -->
+    <!-- 画面2: ガチャリアルタイム入力画面（添付2枚目のスプレッドシート完全再現） -->
+    <!-- ----------------------------------------------------------------------- -->
+    <section class="view-panel" id="viewGachaInput" style="display: none;">
+      <div class="sheet-container">
+        <!-- シート上部タイトル＆クイックステータス -->
+        <div class="sheet-header-bar">
+          <div class="sheet-title-group">
+            <h2 id="sheetPullTitle">✨ 10連 ガチャ入力シート</h2>
+            <span class="sheet-subtitle" id="sheetPullSubtitle">累計 1 〜 10 連目</span>
+          </div>
+          <div class="sheet-info-tags">
+            <span class="info-badge" id="sheetModeBadge">3% 通常</span>
+            <span class="info-badge highlight-charge" id="sheetCurrentChargeBadge">開始チャージ: 0</span>
+          </div>
+        </div>
+
+        <div class="sheet-guide-note">
+          <span>⌨️ <b>入力方法</b>: ☆3生徒が出た行の「生徒名」を入力（平仮名・カタカナ対応）。☆1・☆2は空欄のままでOK！PU生徒は自動でpick☑、初入手は新☑が入ります。</span>
+        </div>
+
+        <!-- 添付2枚目のスプレッドシート表UI -->
+        <div class="sheet-table-wrapper">
+          <table class="gacha-sheet-table" id="gachaSheetTable">
+            <thead>
+              <tr>
+                <th class="col-seq"> </th>
+                <th class="col-total">累計</th>
+                <th class="col-charge">チャージ</th>
+                <th class="col-name">生徒名</th>
+                <th class="col-pick">pick</th>
+                <th class="col-new">新</th>
+              </tr>
+            </thead>
+            <tbody id="gachaSheetTbody">
+              <!-- 行（10行または1行）がJavaScriptで動的生成されます -->
+            </tbody>
+          </table>
+        </div>
+
+        <!-- 入力操作ボタンバー（戻る・OK・次の10連） -->
+        <div class="sheet-footer-actions">
+          <button id="btnSheetBack" class="btn-sheet-secondary">
+            ← 戻る
+          </button>
+          <div class="sheet-primary-actions">
+            <button id="btnSheetSubmitOk" class="btn-sheet-ok">
+              ✔ OK（集計へ）
+            </button>
+            <button id="btnSheetSubmitNext" class="btn-sheet-next">
+              次の10連 →
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 生徒名入力用オートコンプリート・ポップアップ（絶対配置） -->
+      <div id="studentInputGuidePopup" class="student-guide-popup" style="display: none;">
+        <div class="guide-popup-header">
+          <span class="guide-title">☆3生徒クイック選択 (平仮名・カタカナ前方一致)</span>
+          <span class="guide-count" id="guideResultCount">0 件</span>
+        </div>
+        <div class="guide-popup-list" id="guidePopupList">
+          <!-- 生徒候補リスト（顔アイコン + 生徒名） -->
+        </div>
+      </div>
+    </section>
+
+    <!-- ----------------------------------------------------------------------- -->
+    <!-- 画面3: 集計画面（ダッシュボード） -->
+    <!-- ----------------------------------------------------------------------- -->
+    <section class="view-panel" id="viewDashboard" style="display: none;">
+      
+      <!-- ダッシュボード内クイック引くバー -->
+      <div class="dashboard-pull-bar">
+        <div class="pull-bar-info">
+          <span class="live-indicator"><span class="pulse-dot"></span>集計中</span>
+          <span class="pull-bar-desc">追加でガチャを引く:</span>
+        </div>
+        <div class="pull-bar-buttons">
+          <button id="btnDashPull1" class="btn-action btn-pull1">
+            ⚡ 1連を引く
+          </button>
+          <button id="btnDashPull10" class="btn-action btn-pull10">
+            ✨ 10連を引く
+          </button>
+        </div>
+      </div>
+
+      <!-- 最適化された統計グリッド（3%または6%の片方のみを主役表示） -->
+      <div class="dashboard-grid-cards">
+        <!-- カード1: 総ガチャ回数 & 青輝石 -->
+        <div class="card stat-card">
+          <div class="card-head">
+            <span class="card-title">総ガチャ回数 / 消費青輝石</span>
+            <span class="card-icon">💎</span>
+          </div>
+          <div class="card-main-val">
+            <span id="dashTotalPulls">0</span> <span class="unit">連</span>
+          </div>
+          <div class="card-sub-info">
+            <span>消費青輝石: <b id="dashTotalPyroxene">0</b> 個</span>
+            <span>(10連: <span id="dashTenPullsCount">0</span>回 / 単発: <span id="dashSinglePullsCount">0</span>回)</span>
+          </div>
+        </div>
+
+        <!-- カード2: ☆3確率（選択中の3%または6%に最適化） -->
+        <div class="card stat-card" id="dashCardThreeStar">
+          <div class="card-head">
+            <span class="card-title" id="dashThreeStarTitle">☆3確率 (3%通常枠)</span>
+            <span class="card-badge" id="dashThreeStarBadge">通常</span>
+          </div>
+          <div class="card-main-val">
+            <span id="dashThreeStarRate">0.00</span> <span class="unit">%</span>
+          </div>
+          <div class="card-sub-info" id="dashThreeStarSub">
+            <span>獲得: <b id="dashThreeStarCount">0</b> 名</span>
+            <span>期待値との差: <b id="dashThreeStarDiffVal">+0.0</b> 名 (<span id="dashLuckEvaluation">普通</span>)</span>
+          </div>
+        </div>
+
+        <!-- カード3: ピックアップ確率 -->
+        <div class="card stat-card">
+          <div class="card-head">
+            <span class="card-title">ピックアップ確率 (実測 / 公表)</span>
+            <span class="card-badge highlight-pu-badge">PU 0.7%</span>
+          </div>
+          <div class="card-main-val highlight-pickup">
+            <span id="dashPickupRate">0.00</span> <span class="unit">%</span>
+          </div>
+          <div class="card-sub-info">
+            <span>獲得: <b id="dashPickupCount">0</b> 名 (期待値: <span id="dashPickupExpected">0.0</span>名)</span>
+            <span>自力PU: <span id="dashNaturalPickupCount">0</span>名 / 天井PU: <span id="dashCeilingPickupCount">0</span>名</span>
+          </div>
+        </div>
+
+        <!-- カード4: 100連目50%枠 勝率 -->
+        <div class="card stat-card">
+          <div class="card-head">
+            <span class="card-title">100連目50%枠 勝率 (実測)</span>
+            <span class="card-badge highlight-win-badge">仮天井</span>
+          </div>
+          <div class="card-main-val highlight-win">
+            <span id="dashWinRate">0.0</span> <span class="unit">%</span>
+          </div>
+          <div class="card-sub-info">
+            <span>勝: <b id="dashWinsCount" style="color:var(--success);">0</b> / 敗: <b id="dashLossesCount" style="color:var(--danger);">0</b></span>
+            <span>(到達回数: <span id="dashFiftyTotalCount">0</span> 回)</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- チャート領域: ★3 確率収束＆推移グラフ（単一確率線に最適化） -->
+      <div class="card chart-card">
+        <div class="chart-header">
+          <div class="chart-title-wrap">
+            <div class="card-title">★3 確率収束折れ線グラフ (時系列推移)</div>
+            <div class="chart-subtext">ガチャ回数の経過に伴う累積☆3排出率の推移と公表確率基準線</div>
+          </div>
+          <div class="chart-legend-box">
+            <span class="legend-item"><span class="legend-line line-actual"></span>実測☆3確率</span>
+            <span class="legend-item"><span class="legend-line line-target"></span>公表確率基準線 (<span id="chartTargetPercent">3.0</span>%)</span>
+          </div>
+        </div>
+        <div class="chart-wrapper">
+          <canvas id="gachaConvergenceChart"></canvas>
+        </div>
+      </div>
+
+      <!-- ガチャ分析詳細カード（ハマり・運のブレ・天井） -->
+      <div class="card analysis-card">
+        <div class="card-title">🔍 ガチャ分析詳細サマリー</div>
+        <div class="analysis-grid">
+          <div class="analysis-item">
+            <div class="analysis-label">☆3なし最大ハマり:</div>
+            <div class="analysis-val warning" id="dashMaxStreak">0 <span class="unit">連</span></div>
+            <div class="analysis-sub">現在ハマり中: <b id="dashCurrentStreak">0</b> 連</div>
+          </div>
+          <div class="analysis-item">
+            <div class="analysis-label">天井（200連到達）回数:</div>
+            <div class="analysis-val" id="dashCeilingCount">0 <span class="unit">回</span></div>
+            <div class="analysis-sub">天井到達率: <span id="dashCeilingRate">0.0</span>%</div>
+          </div>
+          <div class="analysis-item">
+            <div class="analysis-label">運の総合ブレ判定:</div>
+            <div class="analysis-val" id="dashLuckRank">-</div>
+            <div class="analysis-sub" id="dashLuckDetail">二項分布統計に基づく</div>
+          </div>
+          <div class="analysis-item">
+            <div class="analysis-label">現在のチャージ進行度:</div>
+            <div class="analysis-val highlight-charge" id="dashCurrentChargeVal">0 <span class="unit">/ 100</span></div>
+            <div class="analysis-sub" id="dashChargeRemainingText">次の50%枠まで あと 100連</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 排出☆3生徒図鑑（横並びカードレイアウト ＆ 凸数バッジ ＆ 枠色） -->
+      <div class="card directory-card">
+        <div class="directory-header">
+          <div class="directory-title-wrap">
+            <div class="card-title">🎓 排出☆3生徒一覧 (<span id="dashStudentsTotalCount">0</span> 名獲得 / 重複含む)</div>
+            <div class="directory-legend">
+              <span class="badge-legend badge-pu">🟡 ピックアップ</span>
+              <span class="badge-legend badge-new">🔴 新規</span>
+              <span class="badge-legend badge-fifty">🟢 50%枠</span>
+              <span class="badge-legend badge-exchange">⚫ 天井交換</span>
+              <span class="badge-legend badge-regular">⚪ 通常</span>
+            </div>
+          </div>
+        </div>
+        <div class="directory-students-grid" id="dashStudentsGrid">
+          <!-- 獲得した☆3生徒カードが動的に挿入されます -->
+          <div class="empty-state" id="dashStudentsEmpty">まだ☆3生徒は排出されていません。</div>
+        </div>
+      </div>
+
+      <!-- ガチャ履歴データ一覧テーブル（スプレッドシート連携・CSV・TSV） -->
+      <div class="card history-card">
+        <div class="history-header">
+          <div class="history-title-wrap">
+            <div class="card-title">📋 ガチャ履歴データ一覧 (<span id="historyRowCount">0</span> 連)</div>
+            <div class="history-sub">GoogleスプレッドシートやExcelにそのままコピー＆ペースト可能です</div>
+          </div>
+          <div class="history-actions">
+            <button id="btnCopyTsv" class="btn-sm btn-secondary" title="スプレッドシート用TSVをクリップボードにコピー">
+              📋 スプレッドシート用コピー
+            </button>
+            <button id="btnDownloadCsv" class="btn-sm btn-secondary" title="CSVファイルをダウンロード">
+              💾 CSV保存
+            </button>
+            <button id="btnUndoLastPull" class="btn-sm btn-danger-outline" title="直前の引き（10連または1連）を取り消す">
+              ↩ 直前を取り消す
+            </button>
+          </div>
+        </div>
+        <div class="history-table-wrapper">
+          <table class="history-table" id="historyTable">
+            <thead>
+              <tr>
+                <th>連番</th>
+                <th>累計</th>
+                <th>チャージ</th>
+                <th>生徒名</th>
+                <th>枠種別</th>
+                <th>pick</th>
+                <th>新</th>
+                <th>備考</th>
+              </tr>
+            </thead>
+            <tbody id="historyTableTbody">
+              <!-- ガチャ全履歴行 -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </section>
+
+  </main>
+
+  <!-- ========================================================================= -->
+  <!-- モーダル1: 新規生徒アイコン仮登録（添付1枚目を完全再現したクロッパー） -->
+  <!-- ========================================================================= -->
+  <dialog class="modal-dialog" id="modalCustomStudent">
+    <div class="modal-content modal-custom-student">
+      <div class="modal-header">
+        <div class="modal-title-wrap">
+          <h3>🖼️ 新規生徒アイコン仮登録</h3>
+          <p class="modal-subtitle">Wiki未掲載の新実装生徒の名前とアイコンを仮登録してガチャ入力で即時利用可能にします</p>
+        </div>
+        <button type="button" class="modal-close-btn" id="btnCloseCustomModal">✕</button>
+      </div>
+
+      <div class="modal-body custom-student-body">
+        <!-- 入力コントロール -->
+        <div class="crop-controls-col">
+          <div class="form-row">
+            <label class="form-label" for="customStudentName">生徒名 <span class="req">*</span>:</label>
+            <input type="text" id="customStudentName" class="form-input" placeholder="例: ココロ、ネル（バニーガール）" autocomplete="off">
+            <span class="field-hint">※半角カッコ「()」は自動的に全角「（）」に正規化されます</span>
+          </div>
+
+          <div class="form-row">
+            <label class="form-label">画像アップロード:</label>
+            <div class="upload-dropzone" id="cropDropzone">
+              <input type="file" id="cropFileInput" accept="image/*" style="display: none;">
+              <div class="dropzone-text">
+                <span class="upload-icon">📁</span>
+                <span>クリックして画像を選択、ドラッグ＆ドロップ、または <b>Ctrl+V</b> で貼り付け</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- トリミング操作バー -->
+          <div class="cropper-tools" id="cropperTools" style="display: none;">
+            <div class="tool-row">
+              <label>ズーム拡大縮小:</label>
+              <input type="range" id="cropZoomSlider" min="0.5" max="3.0" step="0.05" value="1.0">
+            </div>
+            <div class="tool-buttons">
+              <button type="button" id="btnCropRotate" class="btn-sm btn-secondary">⟳ 90°回転</button>
+              <button type="button" id="btnCropReset" class="btn-sm btn-secondary">リセット</button>
+            </div>
+            <span class="tool-guide-text">🖱️ 画像をドラッグして位置調整、ホイールで拡大縮小できます。</span>
+          </div>
+        </div>
+
+        <!-- トリミングキャンバス ＆ 添付1枚目再現プレビュー -->
+        <div class="crop-preview-col">
+          <div class="cropper-stage-wrap" id="cropperStageWrap">
+            <!-- インタラクティブ・キャンバス（□枠と〇円形ガイド） -->
+            <canvas id="cropCanvas" width="300" height="300"></canvas>
+            <div class="crop-overlay-guide">
+              <div class="guide-square">
+                <div class="guide-circle"></div>
+              </div>
+            </div>
+            <div class="cropper-placeholder" id="cropPlaceholder">
+              画像を選択してください
+            </div>
+          </div>
+
+          <!-- 添付1枚目完全再現の生徒カードプレビュー -->
+          <div class="student-card-preview-area">
+            <div class="preview-title">カードプレビュー（添付1枚目形式）</div>
+            <div class="ba-card-sample" id="baCardSample">
+              <div class="ba-card-bg-glow"></div>
+              <div class="ba-card-avatar-wrap">
+                <img id="cardSampleImg" src="" alt="生徒アイコン" class="ba-card-avatar">
+              </div>
+              <div class="ba-card-name" id="cardSampleName">生徒名</div>
+              <div class="ba-card-tag">交換 / ピックアップ</div>
+              <div class="ba-card-date" id="cardSampleDate">仮登録</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" id="btnOpenCustomEditor" class="btn-secondary">
+          📝 仮登録エディタを開く
+        </button>
+        <button type="button" id="btnSaveCustomStudent" class="btn-primary" disabled>
+          💾 切り抜いて仮登録する
+        </button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- ========================================================================= -->
+  <!-- モーダル2: 仮登録エディタ（表記揺れ修正、削除、Wiki同期、GitHub共有） -->
+  <!-- ========================================================================= -->
+  <dialog class="modal-dialog" id="modalCustomEditor">
+    <div class="modal-content modal-custom-editor">
+      <div class="modal-header">
+        <div class="modal-title-wrap">
+          <h3>📝 新規生徒 仮登録エディタ & 共有管理</h3>
+          <p class="modal-subtitle">表記揺れの編集・削除、Wiki公式更新時の自動削除、GitHub同期を行います</p>
+        </div>
+        <button type="button" class="modal-close-btn" id="btnCloseEditorModal">✕</button>
+      </div>
+
+      <div class="modal-body">
+        <!-- ツールバー: Wiki同期 & GitHub共有 -->
+        <div class="editor-sync-toolbar">
+          <div class="sync-actions-left">
+            <button id="btnSyncWiki" class="btn-sm btn-secondary" title="Wiki公式図鑑と照合して同名生徒を自動クリーンアップ">
+              🔄 Wikiデータ照合＆自動クリーンアップ
+            </button>
+            <span class="sync-tip" id="wikiSyncStatusText">Wiki公式データと同期可能</span>
+          </div>
+          <div class="sync-actions-right">
+            <button id="btnExportCustomJson" class="btn-sm btn-secondary" title="仮登録データをJSONファイルでダウンロード">
+              ⬇ JSONエクスポート
+            </button>
+            <button id="btnImportCustomJson" class="btn-sm btn-secondary" title="仮登録JSONをインポート">
+              ⬆ JSONインポート
+            </button>
+            <input type="file" id="importCustomFileInput" accept=".json" style="display: none;">
+          </div>
+        </div>
+
+        <!-- GitHub連携設定セクション -->
+        <details class="github-sync-details">
+          <summary>🌐 GitHubリポジトリ共有設定 (他の利用者と共有)</summary>
+          <div class="github-settings-box">
+            <p class="github-note">
+              GitHub Personal Access Token を登録すると、仮登録した生徒データを自動的にリポジトリ <code>https://github.com/roundabout-oxygen/ba-gacha-live-tracker</code> にコミット＆プッシュして共有できます。
+            </p>
+            <div class="github-inputs-row">
+              <input type="password" id="githubTokenInput" class="form-input" placeholder="GitHub Personal Access Token (repo権限)">
+              <button id="btnSaveGithubToken" class="btn-sm btn-secondary">トークン保存</button>
+              <button id="btnPushToGithub" class="btn-sm btn-primary">🚀 GitHubへプッシュ共有</button>
+            </div>
+            <div id="githubSyncResult" class="github-status-text"></div>
+          </div>
+        </details>
+
+        <!-- 仮登録生徒リスト一覧 -->
+        <div class="custom-students-table-wrap">
+          <table class="custom-students-table">
+            <thead>
+              <tr>
+                <th style="width: 60px;">アイコン</th>
+                <th>生徒名 (全角表記)</th>
+                <th>登録日</th>
+                <th>Wiki状況</th>
+                <th style="width: 130px;">操作</th>
+              </tr>
+            </thead>
+            <tbody id="customStudentsTbody">
+              <!-- 仮登録生徒一覧 -->
+            </tbody>
+          </table>
+          <div class="empty-state" id="customStudentsEmpty" style="display: none;">
+            現在仮登録されている新規生徒はいません。
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" id="btnCloseEditor" class="btn-secondary">閉じる</button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- ========================================================================= -->
+  <!-- モーダル3: ガチャ設定モーダル（設定変更） -->
+  <!-- ========================================================================= -->
+  <dialog class="modal-dialog" id="modalSettings">
+    <div class="modal-content modal-settings">
+      <div class="modal-header">
+        <h3>⚙️ ガチャ設定</h3>
+        <button type="button" class="modal-close-btn" id="btnCloseSettingsModal">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-row">
+          <label class="form-label">確率モード変更:</label>
+          <div class="segmented-control">
+            <label class="segment-opt">
+              <input type="radio" name="settingsRateRadio" value="0.03" id="settingsRate3">
+              <span class="segment-btn">通常 (3%)</span>
+            </label>
+            <label class="segment-opt">
+              <input type="radio" name="settingsRateRadio" value="0.06" id="settingsRate6">
+              <span class="segment-btn fest-btn">フェス (6%)</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <label class="form-label">ピックアップ生徒管理:</label>
+          <div class="pickup-tags-wrap" id="settingsPickupTags"></div>
+          <div class="autocomplete-wrapper">
+            <input type="text" id="settingsPickupInput" class="form-input" placeholder="生徒名を追加...">
+            <button type="button" id="btnSettingsAddPickup" class="btn-inline-add">追加</button>
+          </div>
+        </div>
+
+        <div class="form-row danger-zone">
+          <label class="form-label">データの初期化:</label>
+          <p class="field-hint">現在のガチャ履歴データを全て消去して初期状態に戻します。</p>
+          <button type="button" id="btnResetAllData" class="btn-danger-outline">
+            ⚠️ ガチャ履歴を全リセット
+          </button>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" id="btnSaveSettings" class="btn-primary">設定を適用</button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- ========================================================================= -->
+  <!-- 配信（OBS）専用オーバーレイ・コンテナ（配信モードON時に表示） -->
+  <!-- ========================================================================= -->
+  <div class="stream-overlay-layer" id="streamOverlayLayer" style="display: none;">
+    <div class="stream-hud">
+      <div class="stream-hud-header">
+        <div class="stream-title">BA GACHA LIVE</div>
+        <div class="stream-mode-badge" id="streamModeBadge">3% 通常</div>
+      </div>
+      <div class="stream-stats-row">
+        <div class="stream-stat-item">
+          <span class="s-label">総ガチャ</span>
+          <span class="s-val"><b id="streamTotalPulls">0</b><small>連</small></span>
+        </div>
+        <div class="stream-stat-item">
+          <span class="s-label">☆3確率</span>
+          <span class="s-val" id="streamThreeStarRate">0.00%</span>
+        </div>
+        <div class="stream-stat-item highlight-pu">
+          <span class="s-label">PU確率</span>
+          <span class="s-val" id="streamPickupRate">0.00%</span>
+        </div>
+        <div class="stream-stat-item highlight-win">
+          <span class="s-label">50%枠勝率</span>
+          <span class="s-val" id="streamWinRate">0.0%</span>
+        </div>
+        <div class="stream-stat-item highlight-charge">
+          <span class="s-label">チャージ</span>
+          <span class="s-val" id="streamCharge">0/100</span>
+        </div>
+      </div>
+      <div class="stream-recent-pulls" id="streamRecentPulls">
+        <!-- 直近の獲得☆3生徒バッジ -->
+      </div>
+      <button class="stream-exit-btn" id="btnExitStreamMode" title="配信モード終了">✕ 配信UIを閉じる</button>
+    </div>
+  </div>
+
+  <!-- JavaScriptメインロジック -->
+  <script src="app.js"></script>
+</body>
+</html>
