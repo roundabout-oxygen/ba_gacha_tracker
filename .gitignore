@@ -1,0 +1,4 @@
+# Temp files
+*.png
+temp_edge/
+take_screenshot.js

@@ -1,10 +1,11 @@
 /**
- * ブルアカ リアルタイムガチャ集計 (BA Gacha Live Tracker)
- * Version: v1.0.3
- * Core Application Logic
+ * ブルーアーカイブ リアルタイムガチャ集計 (BA Gacha Live Tracker)
+ * Version: v1.0.4
+ * Core Application Logic & State Management
  */
 
-const APP_VERSION = 'v1.0.3';
+const APP_VERSION = 'v1.0.4';
+const REMOTE_STUDENT_ICONS_URL = 'https://raw.githubusercontent.com/roundabout-oxygen/ba_gacha_tabulation/main/data/student_icons.json';
 
 // アプリケーション全体の状態管理
 const AppState = {
@@ -21,28 +22,27 @@ const AppState = {
   // 生徒アイコン辞書 (Wiki正規データ + 仮登録データ)
   officialStudents: {}, // Wiki公式生徒 { "生徒名": "画像URL", ... }
   customStudents: {},   // 新規生徒仮登録 { "生徒名": { icon: "data:image/...", createdAt: "...", wikiSynced: false } }
-  
-  // 現在の入力中シート状態
-  currentInputSession: null,
+
+  // 現在の入力シートセッション
+  currentSession: {
+    pullCount: 10,
+    rows: []
+  },
 
   // Chart.js インスタンス
   chartInstance: null,
 
-  // GitHub連携設定
-  github: {
-    repoOwner: 'roundabout-oxygen',
-    repoName: 'ba-gacha-live-tracker',
-    token: ''
-  }
+  // カラーテーマ
+  theme: 'theme-cyan-light'
 };
+
+// 設定モーダル用の一時退避設定（キャンセル用）
+let tempSettingsConfig = null;
 
 // ==========================================================================
 // ユーティリティ関数（平仮名・カタカナ変換、正規化）
 // ==========================================================================
 
-/**
- * 平仮名をカタカナに変換する
- */
 function hiraganaToKatakana(str) {
   if (!str) return '';
   return str.replace(/[\u3041-\u3096]/g, match => {
@@ -51,9 +51,6 @@ function hiraganaToKatakana(str) {
   });
 }
 
-/**
- * カタカナを平仮名に変換する
- */
 function katakanaToHiragana(str) {
   if (!str) return '';
   return str.replace(/[\u30a1-\u30f6]/g, match => {
@@ -62,9 +59,6 @@ function katakanaToHiragana(str) {
   });
 }
 
-/**
- * 生徒名の表記揺れを正規化する（半角カッコを全角カッコに統一、前後トリム）
- */
 function normalizeStudentName(name) {
   if (!name) return '';
   let res = name.trim();
@@ -73,82 +67,86 @@ function normalizeStudentName(name) {
 }
 
 // ==========================================================================
-// 初期化とイベントリスナー
+// 初期化 & ライフサイクル
 // ==========================================================================
 
-document.addEventListener('DOMContentLoaded', async () => {
-  // バージョン表示更新
+document.addEventListener('DOMContentLoaded', () => {
+  // バージョンバッジ更新
   const versionBadge = document.getElementById('appVersionBadge');
   if (versionBadge) versionBadge.textContent = APP_VERSION;
 
-  // ローカルストレージから設定とデータを読み込み
+  // ローカルストレージ読込
   loadSavedState();
 
-  // 生徒アイコンデータの読み込み
-  await loadStudentDictionaries();
+  // テーマ適用
+  applyTheme(AppState.theme);
 
-  // UIイベントの初期化
-  initUIEventListeners();
+  // イベントリスナー初期化
+  initEventListeners();
 
-  // トリミング機能の初期化
+  // 切り抜きエンジン初期化
   initCropperEngine();
 
-  // 画面状態の復元
-  const urlParams = new URLSearchParams(window.location.search);
-  const requestedView = urlParams.get('view');
-  const isDemo = urlParams.get('demo');
+  // デフォルトでガチャシートの準備（初回10連）
+  setupInputSheet(10);
 
-  // デモデータ注入（テスト用）
-  if (isDemo && AppState.pulls.length === 0) {
+  // 初回ダッシュボード描画
+  updateAllStats();
+  renderConvergenceChart();
+
+  // URLパラメータの解釈 (テスト・自動検証用)
+  const urlParams = new URLSearchParams(window.location.search);
+  if (urlParams.get('demo') === '1' && AppState.pulls.length === 0) {
     loadDemoGachaData();
   }
 
-  if (requestedView === 'sheet') {
-    showGachaInputView(10);
-  } else if (requestedView === 'custom') {
-    setTimeout(() => {
-      document.getElementById('btnOpenCustomModal').click();
-      loadDefaultSampleImageForCropper();
-    }, 200);
-  } else if (requestedView === 'editor') {
-    setTimeout(() => {
-      openCustomEditorModal();
-    }, 200);
-  } else if (requestedView === 'dashboard' || AppState.pulls.length > 0) {
-    showDashboardView();
-  } else {
-    showWelcomeView();
+  const tabParam = urlParams.get('tab');
+  if (tabParam === 'gacha') {
+    switchTab('tabGacha');
+  } else if (tabParam === 'settings') {
+    openSettingsModal();
+  } else if (tabParam === 'custom') {
+    document.getElementById('modalCustomStudent').showModal();
   }
 
-  // 統計とヘッダーの初回更新
-  updateAllStats();
+  // 生徒図鑑データの自動同期取得（バックグラウンド非同期）
+  loadStudentDictionaries().then(() => {
+    renderDirectoryGrid();
+    renderCustomStudentsTableIfOpen();
+  });
 });
 
+function renderCustomStudentsTableIfOpen() {
+  // 必要に応じて図鑑などを更新
+}
+
 /**
- * テスト・デモ用のガチャデータ生成
+ * 添付2枚目を完全再現したデモデータ投入（テスト・検証用）
  */
 function loadDemoGachaData() {
   AppState.config.rate = 0.03;
-  AppState.config.initCharge = 94; // 添付2枚目の例（95連目スタート）
+  AppState.config.initCharge = 94; // 添付2枚目: 累計1〜10、チャージ95〜104
   AppState.config.pickupStudents = ['ココロ'];
 
-  const demoPulls = [];
-  // 1〜10連目（累計1〜10、チャージ95〜104）
   const names = ['', '', '', '', '', 'ヒナ', '', '', '', 'ココロ'];
-  let charge = 94;
+  let runningCharge = 94;
+
+  const demoPulls = [];
   for (let i = 0; i < 10; i++) {
-    charge += 1;
+    const seq = i + 1;
+    runningCharge += 1;
     const name = names[i];
-    const isPick = name === 'ココロ';
+    const isPick = (name === 'ココロ');
     const isThreeStar = Boolean(name);
-    const isGuaranteed50 = (charge === 100);
+    const isGuaranteed50 = (runningCharge === 100);
+
     demoPulls.push({
       id: i + 1,
       pullType: '10',
       batchId: 'demo_batch_1',
-      seqInBatch: i + 1,
-      totalPullIndex: i + 1,
-      charge: charge,
+      seqInBatch: seq,
+      totalPullIndex: seq,
+      charge: runningCharge,
       studentName: name,
       isThreeStar: isThreeStar,
       isPick: isPick,
@@ -157,31 +155,17 @@ function loadDemoGachaData() {
       isGuaranteed100: false,
       createdAt: new Date().toISOString()
     });
-    if (isPick) charge = 0;
+
+    if (isPick) runningCharge = 0;
   }
 
   AppState.pulls = demoPulls;
   persistState();
-}
-
-/**
- * クロッパーに初期サンプル画像（ココロ）をロード
- */
-function loadDefaultSampleImageForCropper() {
-  const img = new Image();
-  img.onload = () => {
-    CropperState.img = img;
-    resetCropperPosition();
-    const tools = document.getElementById('cropperTools');
-    if (tools) tools.style.display = 'flex';
-    const ph = document.getElementById('cropPlaceholder');
-    if (ph) ph.style.display = 'none';
-    const nameInput = document.getElementById('customStudentName');
-    if (nameInput) nameInput.value = 'ココロ';
-    drawCropCanvas();
-    checkCustomSaveButtonState();
-  };
-  img.src = 'data/temp_students/kokoro_sample.png';
+  updateAllStats();
+  renderHistoryTable();
+  renderDirectoryGrid();
+  renderConvergenceChart();
+  setupInputSheet(10);
 }
 
 // ==========================================================================
@@ -202,11 +186,9 @@ function loadSavedState() {
     if (savedCustom) {
       AppState.customStudents = JSON.parse(savedCustom);
     }
-    const savedGh = localStorage.getItem('ba_github_token');
-    if (savedGh) {
-      AppState.github.token = savedGh;
-      const tokenInput = document.getElementById('githubTokenInput');
-      if (tokenInput) tokenInput.value = savedGh;
+    const savedTheme = localStorage.getItem('ba_gacha_theme');
+    if (savedTheme) {
+      AppState.theme = savedTheme;
     }
   } catch (err) {
     console.error('Failed to load state from localStorage:', err);
@@ -218,27 +200,67 @@ function persistState() {
     localStorage.setItem('ba_gacha_config', JSON.stringify(AppState.config));
     localStorage.setItem('ba_gacha_pulls', JSON.stringify(AppState.pulls));
     localStorage.setItem('ba_custom_students', JSON.stringify(AppState.customStudents));
+    localStorage.setItem('ba_gacha_theme', AppState.theme);
   } catch (err) {
     console.error('Failed to persist state:', err);
   }
 }
 
+function applyTheme(themeName) {
+  AppState.theme = themeName;
+  if (themeName === 'theme-tactical-dark') {
+    document.body.classList.remove('theme-cyan-light');
+    document.body.classList.add('theme-tactical-dark');
+  } else {
+    document.body.classList.remove('theme-tactical-dark');
+    document.body.classList.add('theme-cyan-light');
+  }
+  const btnCyan = document.getElementById('btnThemeCyan');
+  const btnDark = document.getElementById('btnThemeDark');
+  if (btnCyan && btnDark) {
+    if (themeName === 'theme-tactical-dark') {
+      btnDark.classList.add('active');
+      btnCyan.classList.remove('active');
+    } else {
+      btnCyan.classList.add('active');
+      btnDark.classList.remove('active');
+    }
+  }
+}
+
 // ==========================================================================
-// 生徒アイコン辞書のロード & Wiki同期クリーンアップ
+// 生徒図鑑データの自動同期取得（GitHub Raw優先）
 // ==========================================================================
 
 async function loadStudentDictionaries() {
-  // 1. 公式Wikiデータ (data/student_icons.json) をフェッチ
+  let loaded = false;
+
+  // 1. GitHub (roundabout-oxygen/ba_gacha_tabulation) から自動フェッチ
   try {
-    const res = await fetch('data/student_icons.json');
+    const res = await fetch(REMOTE_STUDENT_ICONS_URL, { cache: 'no-cache' });
     if (res.ok) {
       AppState.officialStudents = await res.json();
+      loaded = true;
+      console.log('Successfully fetched student icons from GitHub roundabout-oxygen/ba_gacha_tabulation.');
     }
-  } catch (e) {
-    console.warn('Could not fetch data/student_icons.json:', e);
+  } catch (err) {
+    console.warn('Could not fetch student icons from remote GitHub:', err);
   }
 
-  // 2. 共有の仮登録データ (data/custom_students.json) をフェッチしてマージ
+  // 2. フォールバック: ローカルの data/student_icons.json
+  if (!loaded) {
+    try {
+      const localRes = await fetch('data/student_icons.json');
+      if (localRes.ok) {
+        AppState.officialStudents = await localRes.json();
+        console.log('Loaded student icons from local fallback.');
+      }
+    } catch (err) {
+      console.warn('Could not load local student_icons.json fallback:', err);
+    }
+  }
+
+  // 3. ローカルの仮登録データ (data/custom_students.json) があればマージ
   try {
     const resCustom = await fetch('data/custom_students.json');
     if (resCustom.ok) {
@@ -248,23 +270,19 @@ async function loadStudentDictionaries() {
       }
     }
   } catch (e) {
-    console.warn('Could not fetch data/custom_students.json:', e);
+    // 省略可
   }
 
-  // 3. Wiki公式更新時の自動クリーンアップ判定
+  // 4. 重複自動クリーンアップ
   cleanupSyncedCustomStudents(false);
 }
 
-/**
- * Wiki公式データに同名生徒が登録された場合、仮登録から自動削除・移行する
- */
-function cleanupSyncedCustomStudents(showNotification = true) {
+function cleanupSyncedCustomStudents(showNotification = false) {
   const removedNames = [];
   const customKeys = Object.keys(AppState.customStudents);
 
   customKeys.forEach(name => {
     const norm = normalizeStudentName(name);
-    // 公式Wiki図鑑に存在するか確認
     if (AppState.officialStudents[norm] || AppState.officialStudents[name]) {
       removedNames.push(name);
       delete AppState.customStudents[name];
@@ -273,51 +291,39 @@ function cleanupSyncedCustomStudents(showNotification = true) {
 
   if (removedNames.length > 0) {
     persistState();
-    renderCustomStudentsTable();
     if (showNotification) {
-      alert(`【Wikiデータ同期】以下の生徒がWiki公式図鑑に追加されたため、仮登録から正規データへと移行・自動整理されました：\n\n・${removedNames.join('\n・')}`);
+      alert(`【図鑑同期】公式図鑑に追加されたため、以下の仮登録生徒が自動移行されました：\n\n・${removedNames.join('\n・')}`);
     }
   } else if (showNotification) {
-    alert('【Wikiデータ同期】仮登録の生徒の中に、現在Wiki公式に追加された重複生徒はありませんでした。すべて最新です。');
+    alert('【図鑑同期】図鑑データは最新です。重複している仮登録生徒はありませんでした。');
   }
 }
 
-/**
- * 生徒名からアイコン画像URLを取得（仮登録優先 → Wiki公式）
- */
 function getStudentIconUrl(studentName) {
   if (!studentName) return '';
   const norm = normalizeStudentName(studentName);
-  
-  // 仮登録にあるか確認
+
   if (AppState.customStudents[norm] && AppState.customStudents[norm].icon) {
     return AppState.customStudents[norm].icon;
   }
   if (AppState.customStudents[studentName] && AppState.customStudents[studentName].icon) {
     return AppState.customStudents[studentName].icon;
   }
-
-  // Wiki公式図鑑にあるか確認
   if (AppState.officialStudents[norm]) {
     return AppState.officialStudents[norm];
   }
   if (AppState.officialStudents[studentName]) {
     return AppState.officialStudents[studentName];
   }
-
   return '';
 }
 
-/**
- * 生徒名サジェスト検索（平仮名・カタカナ前方一致 & あいまい検索）
- */
 function searchStudents(query) {
   if (!query || !query.trim()) return [];
   const q = query.trim();
   const qKatakana = hiraganaToKatakana(q);
   const qHiragana = katakanaToHiragana(q);
 
-  // 全生徒名リスト（公式 + 仮登録）
   const allNames = Array.from(new Set([
     ...Object.keys(AppState.customStudents),
     ...Object.keys(AppState.officialStudents)
@@ -330,7 +336,6 @@ function searchStudents(query) {
     const normName = normalizeStudentName(name);
     const nameHiragana = katakanaToHiragana(normName);
 
-    // 前方一致
     if (
       normName.startsWith(q) ||
       normName.startsWith(qKatakana) ||
@@ -346,50 +351,43 @@ function searchStudents(query) {
     }
   });
 
-  // 前方一致を優先して結合
-  return [...startsWithMatches, ...includesMatches].slice(0, 20);
+  return [...startsWithMatches, ...includesMatches].slice(0, 15);
 }
 
 // ==========================================================================
-// 画面切り替え (Welcome, GachaInput, Dashboard)
+// タブ切り替え & ナビゲーション
 // ==========================================================================
 
-function showWelcomeView() {
-  document.getElementById('viewWelcome').style.display = 'block';
-  document.getElementById('viewGachaInput').style.display = 'none';
-  document.getElementById('viewDashboard').style.display = 'none';
-  renderWelcomeForm();
-}
+function switchTab(tabId) {
+  const tabBtns = document.querySelectorAll('#mainTabsNav .nav-tab-btn');
+  tabBtns.forEach(btn => {
+    if (btn.getAttribute('data-tab') === tabId) {
+      btn.classList.add('active');
+    } else {
+      btn.classList.remove('active');
+    }
+  });
 
-function showDashboardView() {
-  document.getElementById('viewWelcome').style.display = 'none';
-  document.getElementById('viewGachaInput').style.display = 'none';
-  document.getElementById('viewDashboard').style.display = 'block';
-  updateAllStats();
-  renderHistoryTable();
-  renderDirectoryGrid();
-  renderConvergenceChart();
-}
+  const tabContents = document.querySelectorAll('.tab-view-content');
+  tabContents.forEach(content => {
+    if (content.id === tabId) {
+      content.classList.add('active');
+    } else {
+      content.classList.remove('active');
+    }
+  });
 
-function showGachaInputView(pullCount = 10) {
-  document.getElementById('viewWelcome').style.display = 'none';
-  document.getElementById('viewGachaInput').style.display = 'block';
-  document.getElementById('viewDashboard').style.display = 'none';
-
-  // 10連または1連の入力シートを構築
-  setupInputSession(pullCount);
+  if (tabId === 'tabDashboard') {
+    updateAllStats();
+    renderHistoryTable();
+    renderDirectoryGrid();
+    renderConvergenceChart();
+  }
 }
 
 // ==========================================================================
-// ガチャ進行＆チャージ計算ロジック
+// チャージ計算ロジック
 // ==========================================================================
-
-/**
- * 現在の累積ガチャ回数を取得
- */
-function getTotalPullsCount() {
-  return AppState.pulls.length;
-}
 
 /**
  * 直前までのチャージ数を計算
@@ -400,642 +398,569 @@ function calculateCurrentCharge() {
   for (const pull of AppState.pulls) {
     charge += 1;
     if (pull.isPick) {
-      charge = 0; // 引いた時点でリセット（次の引きは1からスタート）
+      charge = 0; // 次の引きで1になる
     }
   }
   return charge;
 }
 
+// ==========================================================================
+// 作戦記録シート (タブ2: ガチャを引く)
+// ==========================================================================
+
 /**
- * 10連/1連の入力シートセッションを開始
+ * 入力シートの初期セットアップ
  */
-function setupInputSession(count = 10) {
-  const currentTotal = getTotalPullsCount();
-  const startCharge = calculateCurrentCharge();
+function setupInputSheet(pullCount = 10) {
+  AppState.currentSession.pullCount = pullCount;
+  const currentTotal = AppState.pulls.length;
+  let runningCharge = calculateCurrentCharge();
 
-  AppState.currentInputSession = {
-    count: count,
-    startTotal: currentTotal,
-    startCharge: startCharge,
-    rows: []
-  };
-
-  // 行データの初期化
-  let runningCharge = startCharge;
-  for (let i = 1; i <= count; i++) {
+  const rows = [];
+  for (let i = 0; i < pullCount; i++) {
+    const seq = i + 1;
+    const total = currentTotal + seq;
     runningCharge += 1;
-    AppState.currentInputSession.rows.push({
-      seq: i,
-      total: currentTotal + i,
-      charge: runningCharge,
+    const chargeVal = runningCharge;
+    const isGuaranteed50 = (chargeVal === 100);
+    const isGuaranteed100 = (chargeVal === 200);
+
+    rows.push({
+      seq: seq,
+      total: total,
+      charge: chargeVal,
       studentName: '',
       isPick: false,
-      isNew: false
+      isNew: false,
+      isGuaranteed50: isGuaranteed50,
+      isGuaranteed100: isGuaranteed100
     });
   }
 
-  // シートUIの表示更新
-  const sheetTitle = document.getElementById('sheetPullTitle');
-  const sheetSub = document.getElementById('sheetPullSubtitle');
-  const btnNext = document.getElementById('btnSheetSubmitNext');
-
-  if (count === 10) {
-    sheetTitle.textContent = '✨ 10連 ガチャ入力シート';
-    sheetSub.textContent = `累計 ${currentTotal + 1} 〜 ${currentTotal + 10} 連目`;
-    btnNext.textContent = '次の10連 →';
-  } else {
-    sheetTitle.textContent = '⚡ 1連 ガチャ入力シート';
-    sheetSub.textContent = `累計 ${currentTotal + 1} 連目`;
-    btnNext.textContent = '次の1連 →';
-  }
-
-  const modeText = AppState.config.rate === 0.06 ? '6% フェス' : '3% 通常';
-  document.getElementById('sheetModeBadge').textContent = modeText;
-  document.getElementById('sheetCurrentChargeBadge').textContent = `開始チャージ: ${startCharge}`;
-
+  AppState.currentSession.rows = rows;
   renderInputSheetTable();
 }
 
 /**
- * 入力シートテーブルの再描画＆チャージ動的再計算
+ * 入力シートテーブルのレンダリング
  */
 function renderInputSheetTable() {
   const tbody = document.getElementById('gachaSheetTbody');
-  if (!tbody || !AppState.currentInputSession) return;
-
-  const session = AppState.currentInputSession;
-  tbody.innerHTML = '';
-
-  // 動的チャージ再計算
-  // ユーザーが途中の行で pick にチェックを入れたら、その次の行のチャージは1からリスタート！
-  let runningCharge = session.startCharge;
-
-  session.rows.forEach((row, idx) => {
-    runningCharge += 1;
-    row.charge = runningCharge;
-
-    const tr = document.createElement('tr');
-    tr.dataset.rowIndex = idx;
-
-    // ☆3が入力されているか
-    if (row.studentName.trim()) {
-      tr.classList.add('row-three-star');
-    }
-
-    // チャージセルのクラス判定 (100は薄黄色ハイライト、200は天井)
-    let chargeClass = 'col-charge';
-    if (row.charge === 100) {
-      chargeClass += ' charge-cell-100';
-    } else if (row.charge >= 200) {
-      chargeClass += ' charge-cell-200';
-    }
-
-    tr.innerHTML = `
-      <td class="col-seq">${row.seq}</td>
-      <td class="col-total">${row.total}</td>
-      <td class="${chargeClass}">${row.charge}</td>
-      <td class="col-name sheet-name-input-cell">
-        <input type="text" class="sheet-name-input" data-index="${idx}" value="${escapeHtml(row.studentName)}" placeholder="☆3生徒名を手打ち..." autocomplete="off">
-      </td>
-      <td class="col-pick">
-        <input type="checkbox" class="sheet-checkbox check-pick" data-index="${idx}" ${row.isPick ? 'checked' : ''}>
-      </td>
-      <td class="col-new">
-        <input type="checkbox" class="sheet-checkbox check-new" data-index="${idx}" ${row.isNew ? 'checked' : ''}>
-      </td>
-    `;
-
-    tbody.appendChild(tr);
-
-    // もしこの行で pick が true なら、次の引きからチャージは 0 にリセット（次の行は +1 されて 1 からスタート）
-    if (row.isPick) {
-      runningCharge = 0;
-    }
-  });
-
-  // テーブル内イベントハンドラを設定
-  attachInputSheetEvents();
-}
-
-/**
- * 入力シート内のイベントリスナー
- */
-function attachInputSheetEvents() {
-  const tbody = document.getElementById('gachaSheetTbody');
   if (!tbody) return;
 
-  // 生徒名インプット
-  const nameInputs = tbody.querySelectorAll('.sheet-name-input');
-  nameInputs.forEach(input => {
-    const idx = parseInt(input.dataset.index, 10);
+  tbody.innerHTML = '';
+  const rows = AppState.currentSession.rows;
+  const pullCount = AppState.currentSession.pullCount;
 
-    input.addEventListener('focus', (e) => {
-      openStudentGuidePopup(input, idx);
-    });
+  // タイトル & サブタイトルの更新
+  const titleEl = document.getElementById('sheetPullTitle');
+  const subEl = document.getElementById('sheetPullSubtitle');
+  const modeBadge = document.getElementById('sheetModeBadge');
+  const chargeBadge = document.getElementById('sheetCurrentChargeBadge');
 
-    input.addEventListener('input', (e) => {
-      const val = normalizeStudentName(e.target.value);
-      AppState.currentInputSession.rows[idx].studentName = val;
-      updatePopupSuggestions(val, input, idx);
-    });
-
-    input.addEventListener('blur', (e) => {
-      // 少しディレイしてポップアップクリックを許容
-      setTimeout(() => {
-        closeStudentGuidePopup();
-        // 生徒名確定処理
-        handleStudentNameCommit(idx);
-      }, 200);
-    });
-
-    input.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        selectFirstPopupSuggestion(idx);
-      }
-    });
-  });
-
-  // pick チェックボックス
-  const pickBoxes = tbody.querySelectorAll('.check-pick');
-  pickBoxes.forEach(box => {
-    box.addEventListener('change', (e) => {
-      const idx = parseInt(e.target.dataset.index, 10);
-      AppState.currentInputSession.rows[idx].isPick = e.target.checked;
-      // ピックアップのチェック変更により後続のチャージ数が変わるため再描画
-      refreshSheetChargeOnly();
-    });
-  });
-
-  // new チェックボックス
-  const newBoxes = tbody.querySelectorAll('.check-new');
-  newBoxes.forEach(box => {
-    box.addEventListener('change', (e) => {
-      const idx = parseInt(e.target.dataset.index, 10);
-      AppState.currentInputSession.rows[idx].isNew = e.target.checked;
-    });
-  });
-}
-
-/**
- * 生徒名確定時の自動判定（PU自動チェック、新規自動判定、チャージ再計算）
- */
-function handleStudentNameCommit(idx) {
-  if (!AppState.currentInputSession) return;
-  const row = AppState.currentInputSession.rows[idx];
-  const name = row.studentName.trim();
-
-  if (name) {
-    // 1. ピックアップ対象生徒なら自動で pick チェックON
-    const isPu = AppState.config.pickupStudents.includes(name);
-    if (isPu) {
-      row.isPick = true;
-    }
-
-    // 2. 過去の獲得履歴および現在のセッション内に同一生徒が未所持なら自動で new チェックON
-    const previouslyOwned = AppState.pulls.some(p => p.studentName === name);
-    const earlierInSession = AppState.currentInputSession.rows.slice(0, idx).some(r => r.studentName === name);
-    if (!previouslyOwned && !earlierInSession) {
-      row.isNew = true;
-    }
-  } else {
-    // 生徒名が空になったらチェックを外す
-    row.isPick = false;
-    row.isNew = false;
+  if (titleEl) titleEl.textContent = `${pullCount}連 ガチャ記録シート`;
+  if (subEl && rows.length > 0) {
+    subEl.textContent = `累計 ${rows[0].total} 〜 ${rows[rows.length - 1].total} 連`;
+  }
+  if (modeBadge) {
+    modeBadge.textContent = AppState.config.rate === 0.06 ? '6% フェス' : '3% 通常';
+  }
+  if (chargeBadge && rows.length > 0) {
+    chargeBadge.textContent = `開始チャージ: ${rows[0].charge - 1}`;
   }
 
-  // チャージを再計算してシートを更新
-  refreshSheetChargeOnly();
+  rows.forEach((row, idx) => {
+    const tr = document.createElement('tr');
+    if (row.charge === 100 || row.charge === 200) {
+      tr.classList.add('row-charge-100');
+    }
+
+    // 1. 連番
+    const tdSeq = document.createElement('td');
+    tdSeq.className = 'col-num';
+    tdSeq.textContent = row.seq;
+    tr.appendChild(tdSeq);
+
+    // 2. 累計
+    const tdTotal = document.createElement('td');
+    tdTotal.className = 'col-total';
+    tdTotal.textContent = row.total;
+    tr.appendChild(tdTotal);
+
+    // 3. チャージ
+    const tdCharge = document.createElement('td');
+    tdCharge.className = 'col-charge';
+    let chargeLabel = row.charge;
+    if (row.charge === 100) chargeLabel += ' (50%)';
+    if (row.charge === 200) chargeLabel += ' (天井)';
+    tdCharge.textContent = chargeLabel;
+    tr.appendChild(tdCharge);
+
+    // 4. 生徒名入力欄 (プレースホルダーなし・枠色と形で入力欄と明示)
+    const tdName = document.createElement('td');
+    tdName.className = 'col-name';
+    const inputWrap = document.createElement('div');
+    inputWrap.className = 'sheet-student-input-wrap';
+
+    const inputName = document.createElement('input');
+    inputName.type = 'text';
+    inputName.className = 'sheet-student-input';
+    inputName.value = row.studentName;
+    inputName.autocomplete = 'off';
+    inputName.dataset.rowIndex = idx;
+
+    if (row.studentName) {
+      inputName.classList.add('has-value');
+      if (row.isPick) inputName.classList.add('is-pickup');
+    }
+
+    // 入力イベント
+    inputName.addEventListener('input', (e) => {
+      onStudentInputChange(idx, e.target.value);
+    });
+    inputName.addEventListener('focus', (e) => {
+      showStudentGuidePopup(inputName, idx);
+    });
+    inputName.addEventListener('keydown', (e) => {
+      handleSuggestKeyNavigation(e, idx);
+    });
+
+    inputWrap.appendChild(inputName);
+    tdName.appendChild(inputWrap);
+    tr.appendChild(tdName);
+
+    // 5. pick チェックボックス
+    const tdPick = document.createElement('td');
+    tdPick.className = 'col-chk';
+    const labelPick = document.createElement('label');
+    labelPick.className = 'sheet-chk-label chk-pick';
+    const chkPick = document.createElement('input');
+    chkPick.type = 'checkbox';
+    chkPick.checked = row.isPick;
+    chkPick.dataset.rowIndex = idx;
+    chkPick.addEventListener('change', (e) => {
+      row.isPick = e.target.checked;
+      if (row.isPick) {
+        inputName.classList.add('is-pickup');
+      } else {
+        inputName.classList.remove('is-pickup');
+      }
+    });
+    const boxPick = document.createElement('span');
+    boxPick.className = 'custom-chk-box';
+    boxPick.textContent = '✔';
+    labelPick.appendChild(chkPick);
+    labelPick.appendChild(boxPick);
+    tdPick.appendChild(labelPick);
+    tr.appendChild(tdPick);
+
+    // 6. 新 チェックボックス
+    const tdNew = document.createElement('td');
+    tdNew.className = 'col-chk';
+    const labelNew = document.createElement('label');
+    labelNew.className = 'sheet-chk-label';
+    const chkNew = document.createElement('input');
+    chkNew.type = 'checkbox';
+    chkNew.checked = row.isNew;
+    chkNew.dataset.rowIndex = idx;
+    chkNew.addEventListener('change', (e) => {
+      row.isNew = e.target.checked;
+    });
+    const boxNew = document.createElement('span');
+    boxNew.className = 'custom-chk-box';
+    boxNew.textContent = '✔';
+    labelNew.appendChild(chkNew);
+    labelNew.appendChild(boxNew);
+    tdNew.appendChild(labelNew);
+    tr.appendChild(tdNew);
+
+    tbody.appendChild(tr);
+  });
 }
 
 /**
- * シートのチャージ列とチェックボックスの整合性を崩さずに再計算して反映
+ * 生徒名の手入力・サジェスト変更時の処理
  */
-function refreshSheetChargeOnly() {
-  if (!AppState.currentInputSession) return;
-  const session = AppState.currentInputSession;
-  let runningCharge = session.startCharge;
+function onStudentInputChange(rowIndex, value) {
+  const row = AppState.currentSession.rows[rowIndex];
+  if (!row) return;
 
-  session.rows.forEach((row, idx) => {
-    runningCharge += 1;
-    row.charge = runningCharge;
+  row.studentName = value;
+  const inputEl = document.querySelector(`.sheet-student-input[data-row-index="${rowIndex}"]`);
+  const chkPick = document.querySelector(`.col-chk input[data-row-index="${rowIndex}"]`);
 
-    const tr = document.querySelector(`#gachaSheetTbody tr[data-row-index="${idx}"]`);
-    if (tr) {
-      const chargeTd = tr.querySelector('.col-charge');
-      if (chargeTd) {
-        chargeTd.textContent = row.charge;
-        chargeTd.className = 'col-charge';
-        if (row.charge === 100) chargeTd.classList.add('charge-cell-100');
-        if (row.charge >= 200) chargeTd.classList.add('charge-cell-200');
-      }
+  if (value.trim()) {
+    if (inputEl) inputEl.classList.add('has-value');
 
-      const pickCb = tr.querySelector('.check-pick');
-      if (pickCb) pickCb.checked = row.isPick;
+    // ピックアップ生徒と一致するか判定
+    const isPickMatch = AppState.config.pickupStudents.some(pu =>
+      normalizeStudentName(pu) === normalizeStudentName(value)
+    );
+    row.isPick = isPickMatch;
+    if (chkPick) chkPick.checked = isPickMatch;
 
-      const newCb = tr.querySelector('.check-new');
-      if (newCb) newCb.checked = row.isNew;
-
-      if (row.studentName.trim()) {
-        tr.classList.add('row-three-star');
-      } else {
-        tr.classList.remove('row-three-star');
-      }
+    if (inputEl) {
+      if (isPickMatch) inputEl.classList.add('is-pickup');
+      else inputEl.classList.remove('is-pickup');
     }
 
-    if (row.isPick) {
-      runningCharge = 0;
+    // 初排出かどうか判定（これまでのpullsに存在しない場合 true）
+    const alreadyPulled = AppState.pulls.some(p =>
+      normalizeStudentName(p.studentName) === normalizeStudentName(value)
+    );
+    row.isNew = !alreadyPulled;
+    const chkNew = document.querySelectorAll(`.col-chk input[data-row-index="${rowIndex}"]`)[1];
+    if (chkNew) chkNew.checked = row.isNew;
+
+  } else {
+    if (inputEl) {
+      inputEl.classList.remove('has-value');
+      inputEl.classList.remove('is-pickup');
     }
-  });
+    row.isPick = false;
+    row.isNew = false;
+    if (chkPick) chkPick.checked = false;
+    const chkNew = document.querySelectorAll(`.col-chk input[data-row-index="${rowIndex}"]`)[1];
+    if (chkNew) chkNew.checked = false;
+  }
+
+  // サジェストリスト更新
+  updateStudentGuidePopup(inputEl, value, rowIndex);
 }
 
 // ==========================================================================
-// 生徒名オートコンプリート・ポップアップ（ガイド）
+// 生徒名サジェストポップアップ (前方一致・平仮名カタカナ)
 // ==========================================================================
 
 let activePopupRowIndex = -1;
+let currentSuggestCandidates = [];
+let highlightedSuggestIndex = 0;
 
-function openStudentGuidePopup(inputEl, rowIndex) {
+function showStudentGuidePopup(inputEl, rowIndex) {
   activePopupRowIndex = rowIndex;
-  const popup = document.getElementById('studentInputGuidePopup');
-  if (!popup) return;
-
-  const rect = inputEl.getBoundingClientRect();
-  popup.style.top = `${rect.bottom + window.scrollY + 4}px`;
-  popup.style.left = `${rect.left + window.scrollX}px`;
-  popup.style.display = 'flex';
-
-  updatePopupSuggestions(inputEl.value, inputEl, rowIndex);
+  updateStudentGuidePopup(inputEl, inputEl.value, rowIndex);
 }
 
-function closeStudentGuidePopup() {
+function updateStudentGuidePopup(inputEl, query, rowIndex) {
+  const popup = document.getElementById('studentInputGuidePopup');
+  const listEl = document.getElementById('guidePopupList');
+  if (!popup || !listEl) return;
+
+  const candidates = searchStudents(query);
+  currentSuggestCandidates = candidates;
+  highlightedSuggestIndex = 0;
+
+  if (candidates.length === 0) {
+    popup.style.display = 'none';
+    return;
+  }
+
+  listEl.innerHTML = '';
+  candidates.forEach((name, cIdx) => {
+    const item = document.createElement('div');
+    item.className = 'suggest-item' + (cIdx === 0 ? ' highlighted' : '');
+    item.dataset.index = cIdx;
+
+    const iconUrl = getStudentIconUrl(name);
+    if (iconUrl) {
+      const img = document.createElement('img');
+      img.className = 'suggest-item-icon';
+      img.src = iconUrl;
+      item.appendChild(img);
+    }
+
+    const span = document.createElement('span');
+    span.textContent = name;
+    item.appendChild(span);
+
+    item.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      selectSuggestStudent(rowIndex, name);
+    });
+
+    listEl.appendChild(item);
+  });
+
+  // ポップアップ位置計算
+  const rect = inputEl.getBoundingClientRect();
+  popup.style.display = 'flex';
+  popup.style.top = `${rect.bottom + window.scrollY + 4}px`;
+  popup.style.left = `${rect.left + window.scrollX}px`;
+  popup.style.width = `${Math.max(rect.width, 220)}px`;
+}
+
+function selectSuggestStudent(rowIndex, name) {
+  const inputEl = document.querySelector(`.sheet-student-input[data-row-index="${rowIndex}"]`);
+  if (inputEl) {
+    inputEl.value = name;
+  }
+  onStudentInputChange(rowIndex, name);
+
   const popup = document.getElementById('studentInputGuidePopup');
   if (popup) popup.style.display = 'none';
   activePopupRowIndex = -1;
 }
 
-function updatePopupSuggestions(query, inputEl, rowIndex) {
+function handleSuggestKeyNavigation(e, rowIndex) {
+  const popup = document.getElementById('studentInputGuidePopup');
+  if (!popup || popup.style.display === 'none') return;
+
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    if (highlightedSuggestIndex < currentSuggestCandidates.length - 1) {
+      highlightedSuggestIndex++;
+      updateSuggestHighlight();
+    }
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    if (highlightedSuggestIndex > 0) {
+      highlightedSuggestIndex--;
+      updateSuggestHighlight();
+    }
+  } else if (e.key === 'Enter') {
+    e.preventDefault();
+    if (currentSuggestCandidates[highlightedSuggestIndex]) {
+      selectSuggestStudent(rowIndex, currentSuggestCandidates[highlightedSuggestIndex]);
+    }
+  } else if (e.key === 'Escape') {
+    popup.style.display = 'none';
+  }
+}
+
+function updateSuggestHighlight() {
   const listEl = document.getElementById('guidePopupList');
-  const countEl = document.getElementById('guideResultCount');
-  if (!listEl || !countEl) return;
-
-  // 検索または全☆3生徒一覧
-  let matches = [];
-  if (query && query.trim()) {
-    matches = searchStudents(query);
-  } else {
-    // 空欄時はピックアップ生徒および代表的な生徒を表示
-    matches = [
-      ...AppState.config.pickupStudents,
-      ...Object.keys(AppState.customStudents),
-      ...Object.keys(AppState.officialStudents).slice(0, 15)
-    ];
-    matches = Array.from(new Set(matches)).slice(0, 15);
-  }
-
-  countEl.textContent = `${matches.length} 件`;
-  listEl.innerHTML = '';
-
-  if (matches.length === 0) {
-    listEl.innerHTML = '<div style="padding: 10px; font-size:12px; color:#64748b;">候補が見つかりません（手打ちのまま確定できます）</div>';
-    return;
-  }
-
-  matches.forEach((name, i) => {
-    const item = document.createElement('div');
-    item.className = 'guide-item';
-    if (i === 0) item.classList.add('selected');
-
-    const iconUrl = getStudentIconUrl(name);
-    const isPu = AppState.config.pickupStudents.includes(name);
-
-    item.innerHTML = `
-      <img src="${iconUrl}" class="guide-avatar" onerror="this.src='data:image/svg+xml,<svg xmlns=\\'http://www.w3.org/2000/svg\\' viewBox=\\'0 0 32 32\\'><circle cx=\\'16\\' cy=\\'16\\' r=\\'15\\' fill=\\'%23e2e8f0\\'/></svg>'">
-      <div class="guide-info">
-        <span class="guide-name">${escapeHtml(name)}</span>
-        <span class="guide-tag">${isPu ? '🟡 ピックアップ生徒' : '☆3生徒'}</span>
-      </div>
-    `;
-
-    item.addEventListener('mousedown', (e) => {
-      e.preventDefault(); // blur防止
-      applyStudentSelection(name, rowIndex);
-    });
-
-    listEl.appendChild(item);
+  if (!listEl) return;
+  const items = listEl.querySelectorAll('.suggest-item');
+  items.forEach((item, idx) => {
+    if (idx === highlightedSuggestIndex) {
+      item.classList.add('highlighted');
+      item.scrollIntoView({ block: 'nearest' });
+    } else {
+      item.classList.remove('highlighted');
+    }
   });
 }
 
-function selectFirstPopupSuggestion(rowIndex) {
-  const listEl = document.getElementById('guidePopupList');
-  if (!listEl) return;
-  const firstItem = listEl.querySelector('.guide-item');
-  if (firstItem) {
-    const nameEl = firstItem.querySelector('.guide-name');
-    if (nameEl) {
-      applyStudentSelection(nameEl.textContent, rowIndex);
-    }
+// ドキュメントクリックでサジェストを閉じる
+document.addEventListener('click', (e) => {
+  const popup = document.getElementById('studentInputGuidePopup');
+  if (!popup) return;
+  if (!popup.contains(e.target) && !e.target.classList.contains('sheet-student-input')) {
+    popup.style.display = 'none';
   }
-}
-
-function applyStudentSelection(studentName, rowIndex) {
-  if (!AppState.currentInputSession) return;
-  const row = AppState.currentInputSession.rows[rowIndex];
-  row.studentName = studentName;
-
-  const input = document.querySelector(`.sheet-name-input[data-index="${rowIndex}"]`);
-  if (input) {
-    input.value = studentName;
-  }
-
-  handleStudentNameCommit(rowIndex);
-  closeStudentGuidePopup();
-}
+});
 
 // ==========================================================================
-// シート入力の確定（OK / 次の10連）
+// シート確定・コミット処理
 // ==========================================================================
 
-function commitCurrentInputSession() {
-  if (!AppState.currentInputSession) return;
-  const session = AppState.currentInputSession;
+function commitCurrentSheet() {
+  const rows = AppState.currentSession.rows;
+  if (!rows || rows.length === 0) return;
+
   const batchId = 'batch_' + Date.now();
+  const pullType = AppState.currentSession.pullCount === 1 ? '1' : '10';
 
-  session.rows.forEach(r => {
-    const isThreeStar = Boolean(r.studentName.trim());
-    const isGuaranteed50 = (r.charge === 100);
-    const isGuaranteed100 = (r.charge >= 200);
-
+  rows.forEach(r => {
+    const isThreeStar = Boolean(r.studentName && r.studentName.trim());
     AppState.pulls.push({
       id: AppState.pulls.length + 1,
-      pullType: session.count === 10 ? '10' : '1',
+      pullType: pullType,
       batchId: batchId,
       seqInBatch: r.seq,
       totalPullIndex: r.total,
       charge: r.charge,
-      studentName: r.studentName.trim(),
+      studentName: r.studentName ? normalizeStudentName(r.studentName) : '',
       isThreeStar: isThreeStar,
-      isPick: r.isPick,
-      isNew: r.isNew,
-      isGuaranteed50: isGuaranteed50,
-      isGuaranteed100: isGuaranteed100,
+      isPick: Boolean(r.isPick),
+      isNew: Boolean(r.isNew),
+      isGuaranteed50: Boolean(r.isGuaranteed50),
+      isGuaranteed100: Boolean(r.isGuaranteed100),
       createdAt: new Date().toISOString()
     });
   });
 
   persistState();
-  AppState.currentInputSession = null;
+  updateAllStats();
 }
 
 // ==========================================================================
-// 統計計算ロジック
+// 統計計算 & 画面更新
 // ==========================================================================
 
-function calculateStats() {
-  const totalPulls = AppState.pulls.length;
+function updateAllStats() {
+  const pulls = AppState.pulls;
+  const totalPulls = pulls.length;
   const pyroxene = totalPulls * 120;
 
-  let threeStarCount = 0;
-  let pickupCount = 0;
-  let naturalPickupCount = 0;
-  let ceilingPickupCount = 0;
-
-  let fiftyWins = 0;
-  let fiftyLosses = 0;
-  let ceilingCount = 0;
-
-  let maxStreak = 0;
-  let currentStreak = 0;
-
-  // ガチャ履歴を走査
-  for (let i = 0; i < totalPulls; i++) {
-    const pull = AppState.pulls[i];
-
-    if (pull.isThreeStar) {
-      threeStarCount++;
-      if (currentStreak > maxStreak) maxStreak = currentStreak;
-      currentStreak = 0;
-    } else {
-      currentStreak++;
-    }
-
-    if (pull.isPick) {
-      pickupCount++;
-      if (pull.isGuaranteed100) {
-        ceilingPickupCount++;
-      } else {
-        naturalPickupCount++;
-      }
-    }
-
-    // 100連目（50%枠）の勝敗判定
-    if (pull.charge === 100) {
-      if (pull.isPick) {
-        fiftyWins++;
-      } else {
-        fiftyLosses++;
-      }
-    }
-
-    // 200連目（天井到達）判定
-    if (pull.charge >= 200) {
-      ceilingCount++;
-    }
-  }
-
-  if (currentStreak > maxStreak) maxStreak = currentStreak;
-
-  // 実測確率
-  const targetRate = AppState.config.rate; // 0.03 or 0.06
+  // ☆３集計
+  const threeStarPulls = pulls.filter(p => p.isThreeStar);
+  const threeStarCount = threeStarPulls.length;
   const threeStarRate = totalPulls > 0 ? (threeStarCount / totalPulls) * 100 : 0;
+
+  const expectedRate = AppState.config.rate || 0.03;
+  const expectedCount = totalPulls * expectedRate;
+  const diffCount = threeStarCount - expectedCount;
+
+  // ピックアップ集計
+  const pickupPulls = pulls.filter(p => p.isPick);
+  const pickupCount = pickupPulls.length;
   const pickupRate = totalPulls > 0 ? (pickupCount / totalPulls) * 100 : 0;
-  const fiftyTotal = fiftyWins + fiftyLosses;
-  const winRate = fiftyTotal > 0 ? (fiftyWins / fiftyTotal) * 100 : 0;
+  const expectedPickup = totalPulls * 0.007;
 
-  // 期待値と過不足
-  const expectedThreeStar = totalPulls * targetRate;
-  const threeStarDiff = threeStarCount - expectedThreeStar;
-  const expectedPickup = totalPulls * 0.007; // ブルアカのピックアップ公表期待値 0.7%
+  // 50%勝率集計 (charge === 100 のときの勝敗)
+  const fiftyPulls = pulls.filter(p => p.charge === 100);
+  const fiftyWins = fiftyPulls.filter(p => p.isPick).length;
+  const fiftyLosses = fiftyPulls.length - fiftyWins;
+  const fiftyWinRate = fiftyPulls.length > 0 ? (fiftyWins / fiftyPulls.length) * 100 : 0;
 
-  // 現在のチャージ数
+  // 現在チャージ
   const currentCharge = calculateCurrentCharge();
+  const chargePercent = Math.min(100, (currentCharge % 100));
+  const remainingTo100 = 100 - (currentCharge % 100);
 
-  // ガチャ運評価
-  let luckRank = '普通';
-  if (totalPulls >= 10) {
-    if (threeStarDiff >= 2.0) luckRank = '神引き (大上振れ)';
-    else if (threeStarDiff >= 0.5) luckRank = '上振れ';
-    else if (threeStarDiff <= -2.0) luckRank = '大爆死 (大下振れ)';
-    else if (threeStarDiff <= -0.5) luckRank = '下振れ';
-  }
+  // 1. トップ簡易集計バー反映
+  setText('liveStatTotalPulls', totalPulls);
+  setText('liveStatPyroxene', pyroxene.toLocaleString());
+  setText('liveStatThreeStarRate', threeStarRate.toFixed(2));
+  setText('liveStatThreeStarCount', threeStarCount);
+  setText('liveStatThreeStarDiff', (diffCount >= 0 ? '+' : '') + diffCount.toFixed(1));
+  setText('liveStatPickupRate', pickupRate.toFixed(2));
+  setText('liveStatPickupCount', pickupCount);
+  setText('liveStatPickupExpected', expectedPickup.toFixed(1));
+  setText('liveStatWinRate', fiftyWinRate.toFixed(1));
+  setText('liveStatWinCount', fiftyWins);
+  setText('liveStatLossCount', fiftyLosses);
+  setText('liveStatFiftyTotal', fiftyPulls.length);
 
-  return {
-    totalPulls,
-    pyroxene,
-    threeStarCount,
-    threeStarRate,
-    targetRate,
-    expectedThreeStar,
-    threeStarDiff,
-    pickupCount,
-    pickupRate,
-    expectedPickup,
-    naturalPickupCount,
-    ceilingPickupCount,
-    fiftyWins,
-    fiftyLosses,
-    fiftyTotal,
-    winRate,
-    ceilingCount,
-    currentCharge,
-    maxStreak,
-    currentStreak,
-    luckRank
-  };
+  const chargeTextEl = document.getElementById('liveStatChargeText');
+  if (chargeTextEl) chargeTextEl.textContent = `${currentCharge} / 100`;
+  const chargeFillEl = document.getElementById('liveChargeProgressFill');
+  if (chargeFillEl) chargeFillEl.style.width = `${chargePercent}%`;
+  const chargeSubEl = document.getElementById('liveChargeSub');
+  if (chargeSubEl) chargeSubEl.textContent = `あと ${remainingTo100}連`;
+
+  // 2. ダッシュボードカード反映
+  setText('dashTotalPulls', totalPulls);
+  setText('dashTotalPyroxene', pyroxene.toLocaleString());
+  const tenPulls = pulls.filter(p => p.pullType === '10').length / 10;
+  setText('dashTenPullsCount', Math.floor(tenPulls));
+  setText('dashSinglePullsCount', pulls.filter(p => p.pullType === '1').length);
+
+  setText('dashThreeStarRate', threeStarRate.toFixed(2));
+  setText('dashThreeStarCount', threeStarCount);
+  setText('dashThreeStarDiffVal', (diffCount >= 0 ? '+' : '') + diffCount.toFixed(1));
+
+  const luckEvaluation = diffCount > 1.5 ? '大勝利！' : diffCount < -1.5 ? '下振れ中' : '期待値通り';
+  setText('dashLuckEvaluation', luckEvaluation);
+
+  setText('dashPickupRate', pickupRate.toFixed(2));
+  setText('dashPickupCount', pickupCount);
+  setText('dashPickupExpected', expectedPickup.toFixed(1));
+  setText('dashNaturalPickupCount', pickupPulls.filter(p => p.charge !== 200).length);
+  setText('dashCeilingPickupCount', pickupPulls.filter(p => p.charge === 200).length);
+
+  setText('dashWinRate', fiftyWinRate.toFixed(1));
+  setText('dashWinsCount', fiftyWins);
+  setText('dashLossesCount', fiftyLosses);
+  setText('dashFiftyTotalCount', fiftyPulls.length);
+
+  // 分析サマリー
+  let maxStreak = 0;
+  let curStreak = 0;
+  pulls.forEach(p => {
+    if (p.isThreeStar) {
+      curStreak = 0;
+    } else {
+      curStreak++;
+      if (curStreak > maxStreak) maxStreak = curStreak;
+    }
+  });
+  setText('dashMaxStreak', maxStreak);
+  setText('dashCurrentStreak', curStreak);
+
+  const ceilingCount = pulls.filter(p => p.charge === 200).length;
+  setText('dashCeilingCount', ceilingCount);
+  const ceilingRate = totalPulls >= 200 ? ((ceilingCount * 200 / totalPulls) * 100).toFixed(1) : '0.0';
+  setText('dashCeilingRate', ceilingRate);
+
+  setText('dashCurrentChargeVal', `${currentCharge} `);
+  setText('dashChargeRemainingText', `あと ${remainingTo100}連`);
+
+  // バッジ更新
+  const rateBadge = document.getElementById('dashThreeStarBadge');
+  if (rateBadge) rateBadge.textContent = AppState.config.rate === 0.06 ? '6% フェス' : '3% 通常';
+  const targetPercent = document.getElementById('chartTargetPercent');
+  if (targetPercent) targetPercent.textContent = (AppState.config.rate * 100).toFixed(1);
 }
 
-/**
- * 全ての統計表示とヘッダーを同期更新
- */
-function updateAllStats() {
-  const stats = calculateStats();
-
-  // 1. トップ固定ヘッダー (常時表示ステータスバー)
-  document.getElementById('liveStatTotalPulls').textContent = stats.totalPulls;
-  document.getElementById('liveStatPyroxene').textContent = stats.pyroxene.toLocaleString();
-
-  const isFest = stats.targetRate === 0.06;
-  const modeText = isFest ? '6% フェス募集' : '3% 通常募集';
-  document.getElementById('headerGachaModeText').textContent = modeText;
-  document.getElementById('liveThreeStarLabel').textContent = `☆3確率 (${isFest ? '6%' : '3%'}枠)`;
-  document.getElementById('liveStatThreeStarRate').textContent = stats.threeStarRate.toFixed(2);
-  document.getElementById('liveStatThreeStarCount').textContent = stats.threeStarCount;
-  
-  const diffSign = stats.threeStarDiff >= 0 ? `+${stats.threeStarDiff.toFixed(1)}` : stats.threeStarDiff.toFixed(1);
-  document.getElementById('liveStatThreeStarDiff').textContent = diffSign;
-
-  document.getElementById('liveStatPickupRate').textContent = stats.pickupRate.toFixed(2);
-  document.getElementById('liveStatPickupCount').textContent = stats.pickupCount;
-  document.getElementById('liveStatPickupExpected').textContent = stats.expectedPickup.toFixed(1);
-
-  document.getElementById('liveStatWinRate').textContent = stats.winRate.toFixed(1);
-  document.getElementById('liveStatWinCount').textContent = stats.fiftyWins;
-  document.getElementById('liveStatLossCount').textContent = stats.fiftyLosses;
-  document.getElementById('liveStatFiftyTotal').textContent = stats.fiftyTotal;
-
-  // チャージプログレス
-  const chargeTarget = stats.currentCharge < 100 ? 100 : 200;
-  const chargePercent = Math.min(100, (stats.currentCharge / chargeTarget) * 100);
-  document.getElementById('liveStatChargeText').textContent = `${stats.currentCharge} / ${chargeTarget}`;
-  document.getElementById('liveChargeProgressFill').style.width = `${chargePercent}%`;
-  const remaining = chargeTarget - stats.currentCharge;
-  document.getElementById('liveChargeSub').textContent = `${chargeTarget}連まであと ${remaining}連`;
-
-  // 2. ダッシュボード画面カード
-  document.getElementById('dashTotalPulls').textContent = stats.totalPulls;
-  document.getElementById('dashTotalPyroxene').textContent = stats.pyroxene.toLocaleString();
-  const tenPulls = AppState.pulls.filter(p => p.pullType === '10').length / 10;
-  const singlePulls = AppState.pulls.filter(p => p.pullType === '1').length;
-  document.getElementById('dashTenPullsCount').textContent = tenPulls;
-  document.getElementById('dashSinglePullsCount').textContent = singlePulls;
-
-  document.getElementById('dashThreeStarTitle').textContent = `☆3確率 (${isFest ? '6%フェス枠' : '3%通常枠'})`;
-  document.getElementById('dashThreeStarBadge').textContent = isFest ? 'フェス6%' : '通常3%';
-  document.getElementById('dashThreeStarRate').textContent = stats.threeStarRate.toFixed(2);
-  document.getElementById('dashThreeStarCount').textContent = stats.threeStarCount;
-  document.getElementById('dashThreeStarDiffVal').textContent = diffSign;
-  document.getElementById('dashLuckEvaluation').textContent = stats.luckRank;
-
-  document.getElementById('dashPickupRate').textContent = stats.pickupRate.toFixed(2);
-  document.getElementById('dashPickupCount').textContent = stats.pickupCount;
-  document.getElementById('dashPickupExpected').textContent = stats.expectedPickup.toFixed(1);
-  document.getElementById('dashNaturalPickupCount').textContent = stats.naturalPickupCount;
-  document.getElementById('dashCeilingPickupCount').textContent = stats.ceilingPickupCount;
-
-  document.getElementById('dashWinRate').textContent = stats.winRate.toFixed(1);
-  document.getElementById('dashWinsCount').textContent = stats.fiftyWins;
-  document.getElementById('dashLossesCount').textContent = stats.fiftyLosses;
-  document.getElementById('dashFiftyTotalCount').textContent = stats.fiftyTotal;
-
-  document.getElementById('chartTargetPercent').textContent = (stats.targetRate * 100).toFixed(1);
-
-  document.getElementById('dashMaxStreak').innerHTML = `${stats.maxStreak} <span class="unit">連</span>`;
-  document.getElementById('dashCurrentStreak').textContent = stats.currentStreak;
-  document.getElementById('dashCeilingCount').innerHTML = `${stats.ceilingCount} <span class="unit">回</span>`;
-  const ceilingRate = stats.totalPulls >= 200 ? ((stats.ceilingCount * 200) / stats.totalPulls * 100).toFixed(1) : '0.0';
-  document.getElementById('dashCeilingRate').textContent = ceilingRate;
-  document.getElementById('dashLuckRank').textContent = stats.luckRank;
-
-  document.getElementById('dashCurrentChargeVal').innerHTML = `${stats.currentCharge} <span class="unit">/ ${chargeTarget}</span>`;
-  document.getElementById('dashChargeRemainingText').textContent = `次の${chargeTarget === 100 ? '50%枠' : '天井'}まで あと ${remaining}連`;
-
-  // 3. 配信HUDオーバーレイ
-  document.getElementById('streamTotalPulls').textContent = stats.totalPulls;
-  document.getElementById('streamThreeStarRate').textContent = `${stats.threeStarRate.toFixed(2)}%`;
-  document.getElementById('streamPickupRate').textContent = `${stats.pickupRate.toFixed(2)}%`;
-  document.getElementById('streamWinRate').textContent = `${stats.winRate.toFixed(1)}%`;
-  document.getElementById('streamCharge').textContent = `${stats.currentCharge}/${chargeTarget}`;
-  document.getElementById('streamModeBadge').textContent = modeText;
+function setText(id, text) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = text;
 }
 
 // ==========================================================================
-// Chart.js 確率収束グラフ（単一確率線に最適化）
+// Chart.js 確率収束グラフ
 // ==========================================================================
 
 function renderConvergenceChart() {
   const canvas = document.getElementById('gachaConvergenceChart');
   if (!canvas) return;
 
-  const targetRatePercent = AppState.config.rate * 100;
+  const pulls = AppState.pulls;
   const labels = [];
   const actualRates = [];
   const targetRates = [];
 
-  let cumThreeStar = 0;
+  const targetRateVal = (AppState.config.rate || 0.03) * 100;
+  let threeCount = 0;
 
-  // 10連ごと、または5連ごとにサンプリングしてグラフ化
-  for (let i = 0; i < AppState.pulls.length; i++) {
-    const p = AppState.pulls[i];
-    if (p.isThreeStar) cumThreeStar++;
-
-    // 10連の区切りまたは最終引きでプロット
-    if ((i + 1) % 10 === 0 || i === AppState.pulls.length - 1) {
-      const pullNum = i + 1;
-      labels.push(`${pullNum}連`);
-      const currentRate = (cumThreeStar / pullNum) * 100;
-      actualRates.push(parseFloat(currentRate.toFixed(2)));
-      targetRates.push(targetRatePercent);
+  // 10連刻みまたは全体の推移をプロット
+  pulls.forEach((p, idx) => {
+    if (p.isThreeStar) threeCount++;
+    if ((idx + 1) % 10 === 0 || idx === pulls.length - 1) {
+      labels.push(`${idx + 1}連`);
+      actualRates.push(((threeCount / (idx + 1)) * 100).toFixed(2));
+      targetRates.push(targetRateVal);
     }
+  });
+
+  if (labels.length === 0) {
+    labels.push('0連');
+    actualRates.push(targetRateVal);
+    targetRates.push(targetRateVal);
   }
 
-  // 既存チャートの破棄
   if (AppState.chartInstance) {
     AppState.chartInstance.destroy();
   }
 
-  const ctx = canvas.getContext('2d');
-  AppState.chartInstance = new Chart(ctx, {
+  const isDark = document.body.classList.contains('theme-tactical-dark');
+  const textColor = isDark ? '#94a3b8' : '#5e6b77';
+  const gridColor = isDark ? 'rgba(0, 174, 239, 0.15)' : 'rgba(0, 174, 239, 0.1)';
+
+  AppState.chartInstance = new Chart(canvas, {
     type: 'line',
     data: {
       labels: labels,
       datasets: [
         {
-          label: '実測☆3確率 (%)',
+          label: '実測☆3確率',
           data: actualRates,
           borderColor: '#00aeef',
-          backgroundColor: 'rgba(0, 174, 239, 0.1)',
+          backgroundColor: 'rgba(0, 174, 239, 0.12)',
+          borderWidth: 2.5,
+          tension: 0.25,
           fill: true,
-          tension: 0.2,
-          borderWidth: 3,
-          pointRadius: 4,
+          pointRadius: 3,
           pointBackgroundColor: '#00aeef'
         },
         {
-          label: `公表確率基準線 (${targetRatePercent}%)`,
+          label: '公表値',
           data: targetRates,
-          borderColor: '#94a3b8',
-          borderDash: [6, 4],
+          borderColor: '#ff3e6c',
           borderWidth: 2,
+          borderDash: [5, 5],
           pointRadius: 0,
           fill: false
         }
@@ -1045,36 +970,31 @@ function renderConvergenceChart() {
       responsive: true,
       maintainAspectRatio: false,
       interaction: {
-        mode: 'index',
-        intersect: false
+        intersect: false,
+        mode: 'index'
       },
       plugins: {
-        legend: {
-          display: false
-        },
+        legend: { display: false },
         tooltip: {
           callbacks: {
-            label: function(context) {
-              return `${context.dataset.label}: ${context.parsed.y.toFixed(2)}%`;
-            }
+            label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y}%`
           }
         }
       },
       scales: {
-        y: {
-          min: 0,
-          suggestedMax: Math.max(targetRatePercent * 2, 8),
-          ticks: {
-            callback: function(val) { return val + '%'; }
-          },
-          grid: {
-            color: 'rgba(0, 0, 0, 0.05)'
-          }
-        },
         x: {
-          grid: {
-            display: false
-          }
+          ticks: { color: textColor, font: { size: 10 } },
+          grid: { color: gridColor }
+        },
+        y: {
+          suggestedMin: 0,
+          suggestedMax: 8,
+          ticks: {
+            color: textColor,
+            font: { size: 10 },
+            callback: (val) => `${val}%`
+          },
+          grid: { color: gridColor }
         }
       }
     }
@@ -1082,944 +1002,688 @@ function renderConvergenceChart() {
 }
 
 // ==========================================================================
-// 排出☆3生徒図鑑 & ガチャ履歴テーブル描画
+// 生徒図鑑 & 履歴テーブル
 // ==========================================================================
 
 function renderDirectoryGrid() {
   const container = document.getElementById('dashStudentsGrid');
-  const empty = document.getElementById('dashStudentsEmpty');
-  const countSpan = document.getElementById('dashStudentsTotalCount');
+  const emptyHint = document.getElementById('dashStudentsEmpty');
+  const countEl = document.getElementById('dashStudentsTotalCount');
   if (!container) return;
 
-  // 排出された☆3生徒を抽出
-  const threeStarPulls = AppState.pulls.filter(p => p.isThreeStar && p.studentName.trim());
-  countSpan.textContent = threeStarPulls.length;
+  const threeStarPulls = AppState.pulls.filter(p => p.isThreeStar);
+  if (countEl) countEl.textContent = threeStarPulls.length;
 
   if (threeStarPulls.length === 0) {
+    if (emptyHint) emptyHint.style.display = 'block';
     container.innerHTML = '';
-    if (empty) empty.style.display = 'block';
+    if (emptyHint) container.appendChild(emptyHint);
     return;
   }
-  if (empty) empty.style.display = 'none';
 
-  // 生徒ごとの獲得回数集計
-  const studentMap = new Map();
-  threeStarPulls.forEach(pull => {
-    const name = pull.studentName.trim();
-    if (!studentMap.has(name)) {
-      studentMap.set(name, {
-        name: name,
-        iconUrl: getStudentIconUrl(name),
-        isPick: pull.isPick,
-        isNew: pull.isNew,
-        isGuaranteed50: pull.isGuaranteed50,
-        isGuaranteed100: pull.isGuaranteed100,
-        count: 0
-      });
-    }
-    const entry = studentMap.get(name);
-    entry.count++;
-    if (pull.isPick) entry.isPick = true;
-    if (pull.isGuaranteed100) entry.isGuaranteed100 = true;
-    if (pull.isGuaranteed50) entry.isGuaranteed50 = true;
-  });
-
+  if (emptyHint) emptyHint.style.display = 'none';
   container.innerHTML = '';
-  studentMap.forEach(item => {
+
+  threeStarPulls.forEach(pull => {
     const card = document.createElement('div');
     card.className = 'student-card-item';
 
-    // 枠色クラスの決定
-    let frameClass = 'frame-regular';
-    let tagText = '通常';
-    let tagClass = 'badge-regular';
-
-    if (item.isGuaranteed100) {
-      frameClass = 'frame-exchange';
-      tagText = '天井交換';
-      tagClass = 'badge-exchange';
-    } else if (item.isPick) {
-      frameClass = 'frame-pu';
-      tagText = 'PU';
-      tagClass = 'badge-pu';
-    } else if (item.isGuaranteed50) {
-      frameClass = 'frame-fifty';
-      tagText = '50%枠';
-      tagClass = 'badge-fifty';
-    } else if (item.isNew) {
-      frameClass = 'frame-new';
-      tagText = '新規';
-      tagClass = 'badge-new';
+    if (pull.charge === 200) {
+      card.classList.add('status-100');
+    } else if (pull.isPick) {
+      card.classList.add('status-pu');
+    } else if (pull.isGuaranteed50) {
+      card.classList.add('status-fifty');
+    } else if (pull.isNew) {
+      card.classList.add('status-new');
     }
 
-    card.innerHTML = `
-      <div class="student-avatar-frame ${frameClass}">
-        <img src="${item.iconUrl}" class="student-avatar-img" onerror="this.src='data:image/svg+xml,<svg xmlns=\\'http://www.w3.org/2000/svg\\' viewBox=\\'0 0 32 32\\'><circle cx=\\'16\\' cy=\\'16\\' r=\\'15\\' fill=\\'%23e2e8f0\\'/></svg>'">
-        ${item.count > 1 ? `<div class="student-dup-badge">${item.count}回目</div>` : ''}
-      </div>
-      <div class="student-item-name" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</div>
-      <div class="student-item-tag ${tagClass}">${tagText}</div>
-    `;
+    const iconUrl = getStudentIconUrl(pull.studentName);
+    const img = document.createElement('img');
+    img.className = 'student-card-avatar';
+    img.src = iconUrl || 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" fill="%2300aeef"><rect width="100%" height="100%" fill="%23e6f7fd"/><text x="50%" y="55%" font-size="12" font-family="sans-serif" text-anchor="middle" fill="%2300aeef">★3</text></svg>';
+    card.appendChild(img);
 
+    const nameEl = document.createElement('div');
+    nameEl.className = 'student-card-name';
+    nameEl.textContent = pull.studentName;
+    card.appendChild(nameEl);
+
+    const tagsEl = document.createElement('div');
+    tagsEl.className = 'student-card-tags';
+
+    if (pull.charge === 200) {
+      const tag = document.createElement('span');
+      tag.className = 'card-mini-tag dir-badge dir-exchange';
+      tag.textContent = '天井';
+      tagsEl.appendChild(tag);
+    } else if (pull.isPick) {
+      const tag = document.createElement('span');
+      tag.className = 'card-mini-tag dir-badge dir-pu';
+      tag.textContent = 'PU';
+      tagsEl.appendChild(tag);
+    } else if (pull.isGuaranteed50) {
+      const tag = document.createElement('span');
+      tag.className = 'card-mini-tag dir-badge dir-fifty';
+      tag.textContent = '50%';
+      tagsEl.appendChild(tag);
+    }
+
+    if (pull.isNew) {
+      const tag = document.createElement('span');
+      tag.className = 'card-mini-tag dir-badge dir-new';
+      tag.textContent = '新';
+      tagsEl.appendChild(tag);
+    }
+
+    card.appendChild(tagsEl);
     container.appendChild(card);
   });
 }
 
 function renderHistoryTable() {
   const tbody = document.getElementById('historyTableTbody');
-  const countSpan = document.getElementById('historyRowCount');
+  const countEl = document.getElementById('historyRowCount');
   if (!tbody) return;
 
-  countSpan.textContent = AppState.pulls.length;
   tbody.innerHTML = '';
+  const pulls = AppState.pulls;
+  if (countEl) countEl.textContent = pulls.length;
 
-  if (AppState.pulls.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="8" class="empty-state">ガチャ履歴がまだありません。</td></tr>';
-    return;
-  }
-
-  // 最新順（降順）で表示
-  const reversed = [...AppState.pulls].reverse();
-
+  // 最新順（逆順）で表示
+  const reversed = [...pulls].reverse();
   reversed.forEach(p => {
     const tr = document.createElement('tr');
-    if (p.isThreeStar) tr.classList.add('row-three-star');
 
-    let badgeType = '-';
-    if (p.isGuaranteed100) badgeType = '<span class="badge-legend badge-exchange">天井確定</span>';
-    else if (p.isGuaranteed50) badgeType = '<span class="badge-legend badge-fifty">100連50%</span>';
-    else if (p.isThreeStar) badgeType = '<span class="badge-legend badge-regular">☆3通常</span>';
+    const tdSeq = document.createElement('td');
+    tdSeq.textContent = p.seqInBatch || 1;
+    tr.appendChild(tdSeq);
 
-    tr.innerHTML = `
-      <td>${p.seqInBatch} (${p.pullType}連)</td>
-      <td><b>${p.totalPullIndex}</b></td>
-      <td class="${p.charge === 100 ? 'charge-cell-100' : (p.charge >= 200 ? 'charge-cell-200' : '')}">${p.charge}</td>
-      <td>
-        ${p.studentName ? `
-          <div style="display:flex; align-items:center; gap:6px;">
-            <img src="${getStudentIconUrl(p.studentName)}" style="width:24px; height:24px; border-radius:50%; object-fit:cover;">
-            <b>${escapeHtml(p.studentName)}</b>
-          </div>
-        ` : '<span style="color:#94a3b8;">-</span>'}
-      </td>
-      <td>${badgeType}</td>
-      <td>${p.isPick ? '☑' : ''}</td>
-      <td>${p.isNew ? '☑' : ''}</td>
-      <td style="font-size:11px; color:#64748b;">${p.isPick ? 'PU当選 (チャージリセット)' : ''}</td>
-    `;
+    const tdTotal = document.createElement('td');
+    tdTotal.textContent = p.totalPullIndex;
+    tr.appendChild(tdTotal);
+
+    const tdCharge = document.createElement('td');
+    tdCharge.textContent = p.charge;
+    if (p.charge === 100) tdCharge.textContent += ' (50%)';
+    if (p.charge === 200) tdCharge.textContent += ' (天井)';
+    tr.appendChild(tdCharge);
+
+    const tdName = document.createElement('td');
+    tdName.textContent = p.studentName || '-';
+    if (p.isPick) tdName.style.color = 'var(--gold)';
+    tr.appendChild(tdName);
+
+    const tdType = document.createElement('td');
+    tdType.textContent = p.isThreeStar ? '☆3' : '☆1/2';
+    tr.appendChild(tdType);
+
+    const tdPick = document.createElement('td');
+    tdPick.textContent = p.isPick ? '✔' : '-';
+    tr.appendChild(tdPick);
+
+    const tdNew = document.createElement('td');
+    tdNew.textContent = p.isNew ? '✔' : '-';
+    tr.appendChild(tdNew);
+
+    const tdRemark = document.createElement('td');
+    let remark = '';
+    if (p.charge === 100) remark = '100連50%枠';
+    if (p.charge === 200) remark = '200連天井';
+    tdRemark.textContent = remark;
+    tr.appendChild(tdRemark);
+
     tbody.appendChild(tr);
   });
 }
 
 // ==========================================================================
-// スプレッドシート連携（TSVコピー / CSVダウンロード / 取り消し）
+// ⚙ 設定モーダル（キャンセルボタン付き・仮登録・テーマ・確率・引継ぎ）
 // ==========================================================================
 
-function copySpreadsheetTsv() {
-  if (AppState.pulls.length === 0) {
-    alert('コピーするガチャデータがありません。');
-    return;
+function openSettingsModal() {
+  const modal = document.getElementById('modalSettings');
+  if (!modal) return;
+
+  // 現在の設定を一時退避（ディープコピー）
+  tempSettingsConfig = JSON.parse(JSON.stringify(AppState.config));
+
+  // UIに反映
+  const rateRadio = AppState.config.rate === 0.06
+    ? document.getElementById('settingsRate6')
+    : document.getElementById('settingsRate3');
+  if (rateRadio) rateRadio.checked = true;
+
+  const initChargeInput = document.getElementById('settingsInitChargeInput');
+  if (initChargeInput) initChargeInput.value = AppState.config.initCharge || 0;
+
+  renderSettingsPickupTags();
+
+  modal.showModal();
+}
+
+function cancelSettingsModal() {
+  const modal = document.getElementById('modalSettings');
+  if (!modal) return;
+
+  // 変更破棄: 一時退避から復元
+  if (tempSettingsConfig) {
+    AppState.config = JSON.parse(JSON.stringify(tempSettingsConfig));
+  }
+  modal.close();
+}
+
+function saveSettingsModal() {
+  const modal = document.getElementById('modalSettings');
+  if (!modal) return;
+
+  // 1. 確率
+  const rate6 = document.getElementById('settingsRate6');
+  AppState.config.rate = (rate6 && rate6.checked) ? 0.06 : 0.03;
+
+  // 2. チャージ引継ぎ
+  const chargeInput = document.getElementById('settingsInitChargeInput');
+  if (chargeInput) {
+    let val = parseInt(chargeInput.value, 10);
+    if (isNaN(val) || val < 0) val = 0;
+    if (val > 199) val = 199;
+    AppState.config.initCharge = val;
   }
 
-  // 添付2枚目の形式に合わせたTSV文字列を生成
-  // 連番 \t 累計 \t チャージ \t 生徒名 \t pick \t 新
-  let tsv = '連番\t累計\tチャージ\t生徒名\tpick\t新\n';
+  persistState();
+  updateAllStats();
+  modal.close();
+}
 
-  AppState.pulls.forEach(p => {
-    const pick = p.isPick ? '1' : '';
-    const isNew = p.isNew ? '1' : '';
-    tsv += `${p.seqInBatch}\t${p.totalPullIndex}\t${p.charge}\t${p.studentName || ''}\t${pick}\t${isNew}\n`;
-  });
+function renderSettingsPickupTags() {
+  const container = document.getElementById('settingsPickupTags');
+  if (!container) return;
 
-  navigator.clipboard.writeText(tsv).then(() => {
-    alert('【スプレッドシート用コピー完了】\nGoogleスプレッドシートやExcelのセルを選択して「Ctrl + V」でそのまま貼り付けられます！');
-  }).catch(err => {
-    console.error('Clipboard copy failed:', err);
-    alert('クリップボードへのコピーに失敗しました。');
+  container.innerHTML = '';
+  AppState.config.pickupStudents.forEach((student, idx) => {
+    const pill = document.createElement('span');
+    pill.className = 'pickup-tag-pill';
+    pill.textContent = student;
+
+    const btnRemove = document.createElement('button');
+    btnRemove.className = 'pickup-tag-remove';
+    btnRemove.textContent = '✕';
+    btnRemove.addEventListener('click', () => {
+      AppState.config.pickupStudents.splice(idx, 1);
+      renderSettingsPickupTags();
+    });
+
+    pill.appendChild(btnRemove);
+    container.appendChild(pill);
   });
 }
 
-function downloadCsv() {
-  if (AppState.pulls.length === 0) {
-    alert('保存するガチャデータがありません。');
-    return;
+function addPickupStudent(name) {
+  if (!name || !name.trim()) return;
+  const norm = normalizeStudentName(name);
+  if (!AppState.config.pickupStudents.includes(norm)) {
+    AppState.config.pickupStudents.push(norm);
+    renderSettingsPickupTags();
   }
+  const input = document.getElementById('settingsPickupInput');
+  if (input) input.value = '';
+}
 
-  let csv = '連番,累計,チャージ,生徒名,pick,新,枠種別,登録日時\n';
-  AppState.pulls.forEach(p => {
-    const name = `"${(p.studentName || '').replace(/"/g, '""')}"`;
-    const pick = p.isPick ? '1' : '0';
-    const isNew = p.isNew ? '1' : '0';
-    const type = p.isGuaranteed100 ? '天井' : (p.isGuaranteed50 ? '50%枠' : (p.isThreeStar ? '☆3' : '通常'));
-    csv += `${p.seqInBatch},${p.totalPullIndex},${p.charge},${name},${pick},${isNew},${type},${p.createdAt}\n`;
+// ==========================================================================
+// イベントリスナー一括登録
+// ==========================================================================
+
+function initEventListeners() {
+  // 1. タブナビゲーション
+  const tabBtns = document.querySelectorAll('#mainTabsNav .nav-tab-btn');
+  tabBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const tabId = btn.getAttribute('data-tab');
+      if (tabId === 'tabSettings') {
+        openSettingsModal();
+      } else {
+        switchTab(tabId);
+      }
+    });
   });
 
-  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+  // 2. ガチャ実行ボタン（タブ内）
+  const btnPull1 = document.getElementById('btnPull1');
+  const btnPull10 = document.getElementById('btnPull10');
+  if (btnPull1) {
+    btnPull1.addEventListener('click', () => {
+      setupInputSheet(1);
+    });
+  }
+  if (btnPull10) {
+    btnPull10.addEventListener('click', () => {
+      setupInputSheet(10);
+    });
+  }
+
+  // 3. シート確定・ナビゲーションボタン
+  const btnBack = document.getElementById('btnSheetBack');
+  const btnSubmitOk = document.getElementById('btnSheetSubmitOk');
+  const btnSubmitNext = document.getElementById('btnSheetSubmitNext');
+
+  if (btnBack) {
+    btnBack.addEventListener('click', () => {
+      switchTab('tabDashboard');
+    });
+  }
+  if (btnSubmitOk) {
+    btnSubmitOk.addEventListener('click', () => {
+      commitCurrentSheet();
+      switchTab('tabDashboard');
+    });
+  }
+  if (btnSubmitNext) {
+    btnSubmitNext.addEventListener('click', () => {
+      commitCurrentSheet();
+      setupInputSheet(10);
+    });
+  }
+
+  // 4. 設定モーダル
+  const btnCloseX = document.getElementById('btnCloseSettingsX');
+  const btnCancel = document.getElementById('btnCancelSettings');
+  const btnSave = document.getElementById('btnSaveSettings');
+
+  if (btnCloseX) btnCloseX.addEventListener('click', cancelSettingsModal);
+  if (btnCancel) btnCancel.addEventListener('click', cancelSettingsModal);
+  if (btnSave) btnSave.addEventListener('click', saveSettingsModal);
+
+  // ピックアップ追加
+  const btnAddPu = document.getElementById('btnSettingsAddPickup');
+  const inputPu = document.getElementById('settingsPickupInput');
+  if (btnAddPu && inputPu) {
+    btnAddPu.addEventListener('click', () => addPickupStudent(inputPu.value));
+    inputPu.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        addPickupStudent(inputPu.value);
+      }
+    });
+  }
+
+  // テーマ切り替え
+  const btnThemeCyan = document.getElementById('btnThemeCyan');
+  const btnThemeDark = document.getElementById('btnThemeDark');
+  if (btnThemeCyan) {
+    btnThemeCyan.addEventListener('click', () => applyTheme('theme-cyan-light'));
+  }
+  if (btnThemeDark) {
+    btnThemeDark.addEventListener('click', () => applyTheme('theme-tactical-dark'));
+  }
+
+  // 設定から仮登録モーダル起動
+  const btnOpenCustom = document.getElementById('btnOpenCustomModalFromSettings');
+  if (btnOpenCustom) {
+    btnOpenCustom.addEventListener('click', () => {
+      document.getElementById('modalCustomStudent').showModal();
+    });
+  }
+  const btnCloseCustom = document.getElementById('btnCloseCustomModal');
+  if (btnCloseCustom) {
+    btnCloseCustom.addEventListener('click', () => {
+      document.getElementById('modalCustomStudent').close();
+    });
+  }
+
+  // 生徒図鑑自動同期ボタン
+  const btnSync = document.getElementById('btnSyncWikiDirect');
+  if (btnSync) {
+    btnSync.addEventListener('click', async () => {
+      await loadStudentDictionaries();
+      cleanupSyncedCustomStudents(true);
+      updateAllStats();
+      renderDirectoryGrid();
+    });
+  }
+
+  // データ初期化
+  const btnReset = document.getElementById('btnResetAllData');
+  if (btnReset) {
+    btnReset.addEventListener('click', () => {
+      if (confirm('ガチャ履歴を全て初期化しますか？（この操作は取り消せません）')) {
+        AppState.pulls = [];
+        persistState();
+        updateAllStats();
+        renderHistoryTable();
+        renderDirectoryGrid();
+        renderConvergenceChart();
+        setupInputSheet(10);
+        document.getElementById('modalSettings').close();
+      }
+    });
+  }
+
+  // 5. 履歴アクション (TSVコピー, CSV保存, 取消)
+  const btnTsv = document.getElementById('btnCopyTsv');
+  if (btnTsv) {
+    btnTsv.addEventListener('click', copyHistoryTsv);
+  }
+  const btnCsv = document.getElementById('btnDownloadCsv');
+  if (btnCsv) {
+    btnCsv.addEventListener('click', downloadHistoryCsv);
+  }
+  const btnUndo = document.getElementById('btnUndoLastPull');
+  if (btnUndo) {
+    btnUndo.addEventListener('click', undoLastPulls);
+  }
+
+  // 6. 小窓化 & 配信UIボタン
+  const btnPopout = document.getElementById('btnPopoutWindow');
+  if (btnPopout) {
+    btnPopout.addEventListener('click', () => {
+      window.open(window.location.href, 'SchaleGachaTracker', 'width=460,height=760,menubar=no,toolbar=no');
+    });
+  }
+  const btnStream = document.getElementById('btnToggleStreamMode');
+  if (btnStream) {
+    btnStream.addEventListener('click', () => {
+      document.body.classList.toggle('stream-mode');
+    });
+  }
+}
+
+function copyHistoryTsv() {
+  if (AppState.pulls.length === 0) {
+    alert('コピーする履歴データがありません。');
+    return;
+  }
+  const lines = ['連番\t累計\tチャージ\t生徒名\t種別\tpick\t新\t備考'];
+  AppState.pulls.forEach(p => {
+    lines.push([
+      p.seqInBatch || 1,
+      p.totalPullIndex,
+      p.charge,
+      p.studentName || '',
+      p.isThreeStar ? '☆3' : '☆1/2',
+      p.isPick ? '1' : '0',
+      p.isNew ? '1' : '0',
+      p.charge === 100 ? '100連50%枠' : p.charge === 200 ? '200連天井' : ''
+    ].join('\t'));
+  });
+  navigator.clipboard.writeText(lines.join('\n'))
+    .then(() => alert('スプレッドシート用TSVデータをクリップボードにコピーしました！'))
+    .catch(err => console.error(err));
+}
+
+function downloadHistoryCsv() {
+  if (AppState.pulls.length === 0) {
+    alert('保存する履歴データがありません。');
+    return;
+  }
+  const lines = ['連番,累計,チャージ,生徒名,種別,pick,新,備考'];
+  AppState.pulls.forEach(p => {
+    lines.push([
+      p.seqInBatch || 1,
+      p.totalPullIndex,
+      p.charge,
+      `"${p.studentName || ''}"`,
+      p.isThreeStar ? '☆3' : '☆1/2',
+      p.isPick ? 1 : 0,
+      p.isNew ? 1 : 0,
+      `"${p.charge === 100 ? '100連50%枠' : p.charge === 200 ? '200連天井' : ''}"`
+    ].join(','));
+  });
+  const blob = new Blob(['\uFEFF' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
   a.download = `ba_gacha_live_${new Date().toISOString().slice(0, 10)}.csv`;
-  document.body.appendChild(a);
   a.click();
-  document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
 
-function undoLastPull() {
-  if (AppState.pulls.length === 0) {
-    alert('取り消せるガチャ履歴がありません。');
-    return;
-  }
-
+function undoLastPulls() {
+  if (AppState.pulls.length === 0) return;
   const lastBatchId = AppState.pulls[AppState.pulls.length - 1].batchId;
-  const countInBatch = AppState.pulls.filter(p => p.batchId === lastBatchId).length;
-
-  if (confirm(`直前の引き（${countInBatch}連分）を取り消しますか？`)) {
+  if (!lastBatchId) {
+    AppState.pulls.pop();
+  } else {
+    // 直前のバッチ（10連または1連）を一括取り消し
     AppState.pulls = AppState.pulls.filter(p => p.batchId !== lastBatchId);
-    persistState();
-    updateAllStats();
-    renderHistoryTable();
-    renderDirectoryGrid();
-    renderConvergenceChart();
   }
+  persistState();
+  updateAllStats();
+  renderHistoryTable();
+  renderDirectoryGrid();
+  renderConvergenceChart();
 }
 
 // ==========================================================================
-// 新規生徒アイコン仮登録（添付1枚目完全再現クロッパー）
+// 新規生徒仮登録・切り抜きエンジン (□と〇のプレビュー・添付1枚目再現)
 // ==========================================================================
 
 const CropperState = {
   img: null,
-  zoom: 1.0,
-  rotation: 0,
-  posX: 0,
-  posY: 0,
+  scale: 1,
+  offsetX: 0,
+  offsetY: 0,
   isDragging: false,
   dragStartX: 0,
-  dragStartY: 0,
-  initialImgX: 0,
-  initialImgY: 0
+  dragStartY: 0
 };
 
 function initCropperEngine() {
   const canvas = document.getElementById('cropCanvas');
-  const fileInput = document.getElementById('cropFileInput');
   const dropzone = document.getElementById('cropDropzone');
-  const zoomSlider = document.getElementById('cropZoomSlider');
-  const btnRotate = document.getElementById('btnCropRotate');
-  const btnReset = document.getElementById('btnCropReset');
-  const nameInput = document.getElementById('customStudentName');
+  const fileInput = document.getElementById('cropFileInput');
+  if (!canvas || !dropzone || !fileInput) return;
 
-  if (!canvas) return;
-
-  // ドロップゾーンクリック
   dropzone.addEventListener('click', () => fileInput.click());
-
-  // ファイル選択
   fileInput.addEventListener('change', (e) => {
     if (e.target.files && e.target.files[0]) {
-      loadCropImage(e.target.files[0]);
+      loadCropperImageFile(e.target.files[0]);
     }
   });
 
   // ドラッグ＆ドロップ
   dropzone.addEventListener('dragover', (e) => {
     e.preventDefault();
-    dropzone.classList.add('drag-over');
+    dropzone.classList.add('dragover');
   });
-  dropzone.addEventListener('dragleave', () => dropzone.classList.remove('drag-over'));
+  dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragover'));
   dropzone.addEventListener('drop', (e) => {
     e.preventDefault();
-    dropzone.classList.remove('drag-over');
+    dropzone.classList.remove('dragover');
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      loadCropImage(e.dataTransfer.files[0]);
+      loadCropperImageFile(e.dataTransfer.files[0]);
     }
   });
 
-  // Ctrl+V クリップボード画像貼り付け
+  // Ctrl+V クリップボード画像ペースト
   window.addEventListener('paste', (e) => {
     const modal = document.getElementById('modalCustomStudent');
-    if (!modal.open) return;
-    if (e.clipboardData && e.clipboardData.items) {
-      for (const item of e.clipboardData.items) {
-        if (item.type.indexOf('image') !== -1) {
-          const blob = item.getAsFile();
-          loadCropImage(blob);
-          break;
-        }
+    if (!modal || !modal.open) return;
+    const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+    for (const item of items) {
+      if (item.type.indexOf('image') !== -1) {
+        const blob = item.getAsFile();
+        loadCropperImageFile(blob);
+        break;
       }
     }
   });
 
-  // ズームスライダー
-  zoomSlider.addEventListener('input', (e) => {
-    CropperState.zoom = parseFloat(e.target.value);
-    drawCropCanvas();
-  });
-
-  // 回転
-  btnRotate.addEventListener('click', () => {
-    CropperState.rotation = (CropperState.rotation + 90) % 360;
-    drawCropCanvas();
-  });
-
-  // リセット
-  btnReset.addEventListener('click', () => {
-    resetCropperPosition();
-    drawCropCanvas();
-  });
-
   // キャンバスドラッグ操作
   canvas.addEventListener('mousedown', (e) => {
-    if (!CropperState.img) return;
     CropperState.isDragging = true;
-    CropperState.dragStartX = e.clientX;
-    CropperState.dragStartY = e.clientY;
-    CropperState.initialImgX = CropperState.posX;
-    CropperState.initialImgY = CropperState.posY;
+    CropperState.dragStartX = e.clientX - CropperState.offsetX;
+    CropperState.dragStartY = e.clientY - CropperState.offsetY;
   });
-
   window.addEventListener('mousemove', (e) => {
     if (!CropperState.isDragging) return;
-    const dx = e.clientX - CropperState.dragStartX;
-    const dy = e.clientY - CropperState.dragStartY;
-    CropperState.posX = CropperState.initialImgX + dx;
-    CropperState.posY = CropperState.initialImgY + dy;
-    drawCropCanvas();
+    CropperState.offsetX = e.clientX - CropperState.dragStartX;
+    CropperState.offsetY = e.clientY - CropperState.dragStartY;
+    drawCropper();
   });
-
   window.addEventListener('mouseup', () => {
     CropperState.isDragging = false;
   });
 
-  // ホイール拡大縮小
-  canvas.addEventListener('wheel', (e) => {
-    e.preventDefault();
-    if (!CropperState.img) return;
-    const delta = e.deltaY < 0 ? 0.05 : -0.05;
-    CropperState.zoom = Math.max(0.5, Math.min(3.0, CropperState.zoom + delta));
-    zoomSlider.value = CropperState.zoom;
-    drawCropCanvas();
-  });
+  // ズーム操作
+  const slider = document.getElementById('cropZoomSlider');
+  if (slider) {
+    slider.addEventListener('input', (e) => {
+      CropperState.scale = parseFloat(e.target.value);
+      drawCropper();
+    });
+  }
+  const btnZoomIn = document.getElementById('btnCropZoomIn');
+  const btnZoomOut = document.getElementById('btnCropZoomOut');
+  const btnReset = document.getElementById('btnCropReset');
+  if (btnZoomIn) {
+    btnZoomIn.addEventListener('click', () => {
+      CropperState.scale = Math.min(3, CropperState.scale + 0.1);
+      if (slider) slider.value = CropperState.scale;
+      drawCropper();
+    });
+  }
+  if (btnZoomOut) {
+    btnZoomOut.addEventListener('click', () => {
+      CropperState.scale = Math.max(0.5, CropperState.scale - 0.1);
+      if (slider) slider.value = CropperState.scale;
+      drawCropper();
+    });
+  }
+  if (btnReset) {
+    btnReset.addEventListener('click', () => {
+      CropperState.scale = 1;
+      CropperState.offsetX = 0;
+      CropperState.offsetY = 0;
+      if (slider) slider.value = 1;
+      drawCropper();
+    });
+  }
 
-  // 生徒名入力連動
-  nameInput.addEventListener('input', (e) => {
-    const val = normalizeStudentName(e.target.value);
-    document.getElementById('cardSampleName').textContent = val || '生徒名';
-    checkCustomSaveButtonState();
-  });
+  // 保存ボタン
+  const btnSaveStudent = document.getElementById('btnSaveCustomStudent');
+  const nameInput = document.getElementById('customStudentName');
+  if (btnSaveStudent && nameInput) {
+    nameInput.addEventListener('input', () => {
+      const sampleName = document.getElementById('previewCardName');
+      if (sampleName) sampleName.textContent = nameInput.value || '生徒名';
+    });
+    btnSaveStudent.addEventListener('click', saveCustomStudent);
+  }
 }
 
-function loadCropImage(file) {
+function loadCropperImageFile(file) {
   const reader = new FileReader();
   reader.onload = (e) => {
     const img = new Image();
     img.onload = () => {
       CropperState.img = img;
-      resetCropperPosition();
-      document.getElementById('cropperTools').style.display = 'flex';
-      document.getElementById('cropPlaceholder').style.display = 'none';
-      drawCropCanvas();
-      checkCustomSaveButtonState();
+      CropperState.scale = 1;
+      CropperState.offsetX = 0;
+      CropperState.offsetY = 0;
+      const tools = document.getElementById('cropperTools');
+      if (tools) tools.style.display = 'flex';
+      drawCropper();
     };
     img.src = e.target.result;
   };
   reader.readAsDataURL(file);
 }
 
-function resetCropperPosition() {
-  CropperState.zoom = 1.0;
-  CropperState.rotation = 0;
-  CropperState.posX = 150; // キャンバス中央 (300/2)
-  CropperState.posY = 150;
-  const zoomSlider = document.getElementById('cropZoomSlider');
-  if (zoomSlider) zoomSlider.value = 1.0;
-}
-
-function drawCropCanvas() {
+function drawCropper() {
   const canvas = document.getElementById('cropCanvas');
   if (!canvas || !CropperState.img) return;
   const ctx = canvas.getContext('2d');
 
+  canvas.width = canvas.clientWidth;
+  canvas.height = canvas.clientHeight;
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.save();
-
-  // 中心点移動と変形
-  ctx.translate(CropperState.posX, CropperState.posY);
-  ctx.rotate((CropperState.rotation * Math.PI) / 180);
-  ctx.scale(CropperState.zoom, CropperState.zoom);
 
   const img = CropperState.img;
-  // 画像中央を描画中心に合わせる
-  const drawW = 220;
-  const drawH = (img.height / img.width) * 220;
-  ctx.drawImage(img, -drawW / 2, -drawH / 2, drawW, drawH);
+  const cx = canvas.width / 2;
+  const cy = canvas.height / 2;
+  const cropSize = 140;
 
+  // 画像描画
+  ctx.save();
+  ctx.translate(cx + CropperState.offsetX, cy + CropperState.offsetY);
+  ctx.scale(CropperState.scale, CropperState.scale);
+  ctx.drawImage(img, -img.width / 2, -img.height / 2);
   ctx.restore();
 
-  // リアルタイムに添付1枚目プレビューカードを更新
-  updateCardSamplePreview();
+  // 暗幕オーバーレイ
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // 切り抜き範囲クリア
+  ctx.clearRect(cx - cropSize / 2, cy - cropSize / 2, cropSize, cropSize);
+
+  // ガイド枠線
+  ctx.strokeStyle = '#00aeef';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(cx - cropSize / 2, cy - cropSize / 2, cropSize, cropSize);
+
+  // プレビュー生成
+  generateCroppedPreviews(cx, cy, cropSize);
 }
 
-/**
- * 添付1枚目再現の丸アイコンを生成してカードプレビューに反映
- */
-function updateCardSamplePreview() {
-  const croppedDataUrl = generateCroppedCirclePng();
-  if (croppedDataUrl) {
-    const sampleImg = document.getElementById('cardSampleImg');
-    if (sampleImg) sampleImg.src = croppedDataUrl;
+function generateCroppedPreviews(cx, cy, cropSize) {
+  const sqCanvas = document.getElementById('previewSquareCanvas');
+  const ciCanvas = document.getElementById('previewCircleCanvas');
+  const cardImg = document.getElementById('previewCardImg');
+  if (!sqCanvas || !ciCanvas || !CropperState.img) return;
+
+  const sqCtx = sqCanvas.getContext('2d');
+  const ciCtx = ciCanvas.getContext('2d');
+
+  sqCanvas.width = 120;
+  sqCanvas.height = 120;
+  ciCanvas.width = 120;
+  ciCanvas.height = 120;
+
+  const img = CropperState.img;
+  const scale = CropperState.scale;
+  const sx = (img.width / 2) - ((cx - (cx - cropSize / 2) - CropperState.offsetX) / scale);
+  const sy = (img.height / 2) - ((cy - (cy - cropSize / 2) - CropperState.offsetY) / scale);
+  const sWidth = cropSize / scale;
+  const sHeight = cropSize / scale;
+
+  // 四角形
+  sqCtx.clearRect(0, 0, 120, 120);
+  sqCtx.drawImage(img, sx, sy, sWidth, sHeight, 0, 0, 120, 120);
+
+  // 円形
+  ciCtx.clearRect(0, 0, 120, 120);
+  ciCtx.save();
+  ciCtx.beginPath();
+  ciCtx.arc(60, 60, 60, 0, Math.PI * 2);
+  ciCtx.clip();
+  ciCtx.drawImage(img, sx, sy, sWidth, sHeight, 0, 0, 120, 120);
+  ciCtx.restore();
+
+  // カードプレビュー
+  if (cardImg) {
+    cardImg.src = sqCanvas.toDataURL('image/png');
   }
 }
 
-/**
- * ガイドの円形（直径220px）に合わせて正方形＆丸型PNG（透明背景）をエクスポート
- */
-function generateCroppedCirclePng() {
-  const mainCanvas = document.getElementById('cropCanvas');
-  if (!mainCanvas || !CropperState.img) return '';
-
-  const exportCanvas = document.createElement('canvas');
-  const size = 220;
-  exportCanvas.width = size;
-  exportCanvas.height = size;
-  const ctx = exportCanvas.getContext('2d');
-
-  // 円形クリッピングマスク
-  ctx.beginPath();
-  ctx.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2);
-  ctx.closePath();
-  ctx.clip();
-
-  // mainCanvasのガイド正方形領域（中央220x220）をコピー描画
-  // mainCanvas は 300x300、中央は (300-220)/2 = 40
-  ctx.drawImage(mainCanvas, 40, 40, 220, 220, 0, 0, size, size);
-
-  return exportCanvas.toDataURL('image/png');
-}
-
-function checkCustomSaveButtonState() {
-  const name = document.getElementById('customStudentName').value.trim();
-  const btn = document.getElementById('btnSaveCustomStudent');
-  if (btn) {
-    btn.disabled = !(name && CropperState.img);
-  }
-}
-
-/**
- * 仮登録を保存
- */
 function saveCustomStudent() {
   const nameInput = document.getElementById('customStudentName');
-  const normName = normalizeStudentName(nameInput.value);
-
-  if (!normName) {
-    alert('生徒名を入力してください。');
+  const sqCanvas = document.getElementById('previewSquareCanvas');
+  if (!nameInput || !nameInput.value.trim() || !sqCanvas) {
+    alert('生徒名を入力し、画像をアップロードしてください。');
     return;
   }
 
-  const croppedIcon = generateCroppedCirclePng();
-  if (!croppedIcon) {
-    alert('画像をアップロードして切り抜き範囲を指定してください。');
-    return;
-  }
+  const name = normalizeStudentName(nameInput.value.trim());
+  const iconDataUrl = sqCanvas.toDataURL('image/png');
 
-  // 保存
-  AppState.customStudents[normName] = {
-    icon: croppedIcon,
+  AppState.customStudents[name] = {
+    icon: iconDataUrl,
     createdAt: new Date().toISOString(),
     wikiSynced: false
   };
 
   persistState();
-
-  alert(`生徒「${normName}」を仮登録しました！\nガチャの入力サジェストや図鑑ですぐに利用できます。`);
-
-  // モーダルを閉じる
+  alert(`生徒「${name}」のアイコンを仮登録しました！ガチャ入力で利用可能です。`);
   document.getElementById('modalCustomStudent').close();
-
-  // フォームリセット
-  nameInput.value = '';
-  CropperState.img = null;
-  document.getElementById('cropPlaceholder').style.display = 'block';
-  document.getElementById('cropperTools').style.display = 'none';
-
-  // もしダッシュボードが開いていたら再描画
-  renderDirectoryGrid();
-  renderHistoryTable();
-}
-
-// ==========================================================================
-// 仮登録エディタ ＆ GitHub共有管理
-// ==========================================================================
-
-function openCustomEditorModal() {
-  renderCustomStudentsTable();
-  const modal = document.getElementById('modalCustomEditor');
-  if (modal) modal.showModal();
-}
-
-function renderCustomStudentsTable() {
-  const tbody = document.getElementById('customStudentsTbody');
-  const empty = document.getElementById('customStudentsEmpty');
-  if (!tbody) return;
-
-  const names = Object.keys(AppState.customStudents);
-  tbody.innerHTML = '';
-
-  if (names.length === 0) {
-    if (empty) empty.style.display = 'block';
-    return;
-  }
-  if (empty) empty.style.display = 'none';
-
-  names.forEach(name => {
-    const data = AppState.customStudents[name];
-    const tr = document.createElement('tr');
-
-    const inOfficial = Boolean(AppState.officialStudents[name] || AppState.officialStudents[normalizeStudentName(name)]);
-
-    tr.innerHTML = `
-      <td>
-        <img src="${data.icon}" class="custom-row-avatar">
-      </td>
-      <td>
-        <input type="text" class="form-input edit-name-input" data-original-name="${escapeHtml(name)}" value="${escapeHtml(name)}" style="font-size:12px; padding:4px 8px;">
-      </td>
-      <td style="font-size:11px; color:#64748b;">${data.createdAt ? data.createdAt.slice(0, 10) : '-'}</td>
-      <td>
-        ${inOfficial ? '<span class="badge-legend badge-fifty">Wiki登録済 (削除推奨)</span>' : '<span class="badge-legend badge-regular">Wiki未掲載 (仮登録中)</span>'}
-      </td>
-      <td>
-        <div style="display:flex; gap:4px;">
-          <button class="btn-sm btn-secondary btn-update-name" data-original-name="${escapeHtml(name)}">更新</button>
-          <button class="btn-sm btn-danger-outline btn-delete-custom" data-name="${escapeHtml(name)}">削除</button>
-        </div>
-      </td>
-    `;
-
-    tbody.appendChild(tr);
-  });
-
-  // 名前更新ハンドラ
-  tbody.querySelectorAll('.btn-update-name').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const orig = btn.dataset.originalName;
-      const input = tbody.querySelector(`.edit-name-input[data-original-name="${orig}"]`);
-      if (input) {
-        const newName = normalizeStudentName(input.value);
-        if (!newName) {
-          alert('生徒名を入力してください。');
-          return;
-        }
-        if (newName !== orig) {
-          AppState.customStudents[newName] = AppState.customStudents[orig];
-          delete AppState.customStudents[orig];
-          persistState();
-          renderCustomStudentsTable();
-          alert(`生徒名を「${newName}」に更新しました。`);
-        }
-      }
-    });
-  });
-
-  // 削除ハンドラ
-  tbody.querySelectorAll('.btn-delete-custom').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const name = btn.dataset.name;
-      if (confirm(`仮登録生徒「${name}」を削除しますか？`)) {
-        delete AppState.customStudents[name];
-        persistState();
-        renderCustomStudentsTable();
-      }
-    });
-  });
-}
-
-/**
- * GitHubプッシュ共有 (Personal Access Token API)
- */
-async function pushCustomStudentsToGitHub() {
-  const token = AppState.github.token || document.getElementById('githubTokenInput').value.trim();
-  const statusEl = document.getElementById('githubSyncResult');
-
-  if (!token) {
-    statusEl.innerHTML = '<span style="color:#ef4444;">GitHub Personal Access Token を入力してください。</span>';
-    return;
-  }
-
-  statusEl.innerHTML = '<span style="color:#00aeef;">GitHubへプッシュ中...</span>';
-
-  try {
-    const owner = AppState.github.repoOwner;
-    const repo = AppState.github.repoName;
-    const path = 'data/custom_students.json';
-    const apiUrl = `https://api.github.com/repos/${owner}/${repo}/contents/${path}`;
-
-    // 既存ファイルのSHAを取得
-    let sha = '';
-    const getRes = await fetch(apiUrl, {
-      headers: {
-        'Authorization': `token ${token}`,
-        'Accept': 'application/vnd.github.v3+json'
-      }
-    });
-
-    if (getRes.ok) {
-      const fileData = await getRes.json();
-      sha = fileData.sha;
-    }
-
-    // JSONコンテンツの生成
-    const contentObj = { students: AppState.customStudents };
-    const jsonStr = JSON.stringify(contentObj, null, 2);
-    // UTF-8 base64 encode
-    const base64Content = btoa(unescape(encodeURIComponent(jsonStr)));
-
-    const body = {
-      message: `Update custom_students.json via Web App (${APP_VERSION})`,
-      content: base64Content
-    };
-    if (sha) body.sha = sha;
-
-    const putRes = await fetch(apiUrl, {
-      method: 'PUT',
-      headers: {
-        'Authorization': `token ${token}`,
-        'Accept': 'application/vnd.github.v3+json',
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(body)
-    });
-
-    if (putRes.ok) {
-      statusEl.innerHTML = '<span style="color:#10b981;">✔ GitHubへの共有プッシュが完了しました！他の利用者にも反映されます。</span>';
-    } else {
-      const errData = await putRes.json();
-      statusEl.innerHTML = `<span style="color:#ef4444;">プッシュ失敗: ${errData.message || putRes.statusText}</span>`;
-    }
-  } catch (err) {
-    console.error('GitHub push error:', err);
-    statusEl.innerHTML = `<span style="color:#ef4444;">通信エラー: ${err.message}</span>`;
-  }
-}
-
-// ==========================================================================
-// UIイベントリスナー登録
-// ==========================================================================
-
-function initUIEventListeners() {
-  // ナビゲーション / アクションボタン
-  document.getElementById('btnPull1').addEventListener('click', () => showGachaInputView(1));
-  document.getElementById('btnPull10').addEventListener('click', () => showGachaInputView(10));
-  document.getElementById('btnNavDashboard').addEventListener('click', () => showDashboardView());
-  document.getElementById('btnDashPull1').addEventListener('click', () => showGachaInputView(1));
-  document.getElementById('btnDashPull10').addEventListener('click', () => showGachaInputView(10));
-
-  // ガチャ開始ボタン
-  document.getElementById('btnStartGacha').addEventListener('click', () => {
-    const rateVal = parseFloat(document.querySelector('input[name="gachaRateRadio"]:checked').value);
-    const initCharge = parseInt(document.getElementById('initChargeInput').value, 10) || 0;
-
-    AppState.config.rate = rateVal;
-    AppState.config.initCharge = initCharge;
-    persistState();
-
-    updateAllStats();
-    showGachaInputView(10);
-  });
-
-  // シート内ボタン（戻る・OK・次の10連）
-  document.getElementById('btnSheetBack').addEventListener('click', () => {
-    if (AppState.pulls.length > 0) {
-      showDashboardView();
-    } else {
-      showWelcomeView();
-    }
-  });
-
-  document.getElementById('btnSheetSubmitOk').addEventListener('click', () => {
-    commitCurrentInputSession();
-    showDashboardView();
-  });
-
-  document.getElementById('btnSheetSubmitNext').addEventListener('click', () => {
-    const pullCount = AppState.currentInputSession ? AppState.currentInputSession.count : 10;
-    commitCurrentInputSession();
-    updateAllStats();
-    showGachaInputView(pullCount);
-  });
-
-  // スプレッドシートTSVコピー・CSVダウンロード・取り消し
-  document.getElementById('btnCopyTsv').addEventListener('click', copySpreadsheetTsv);
-  document.getElementById('btnDownloadCsv').addEventListener('click', downloadCsv);
-  document.getElementById('btnUndoLastPull').addEventListener('click', undoLastPull);
-
-  // モーダルオープン
-  document.getElementById('btnOpenCustomModal').addEventListener('click', () => {
-    document.getElementById('modalCustomStudent').showModal();
-    // 日付反映
-    const today = new Date();
-    document.getElementById('cardSampleDate').textContent = `${today.getMonth() + 1}/${today.getDate()}`;
-  });
-  document.getElementById('btnCloseCustomModal').addEventListener('click', () => {
-    document.getElementById('modalCustomStudent').close();
-  });
-  document.getElementById('btnSaveCustomStudent').addEventListener('click', saveCustomStudent);
-
-  // エディタモーダル
-  document.getElementById('btnOpenCustomEditor').addEventListener('click', () => {
-    document.getElementById('modalCustomStudent').close();
-    openCustomEditorModal();
-  });
-  document.getElementById('btnCloseEditorModal').addEventListener('click', () => {
-    document.getElementById('modalCustomEditor').close();
-  });
-  document.getElementById('btnCloseEditor').addEventListener('click', () => {
-    document.getElementById('modalCustomEditor').close();
-  });
-
-  // Wiki同期
-  document.getElementById('btnSyncWiki').addEventListener('click', () => {
-    cleanupSyncedCustomStudents(true);
-  });
-
-  // GitHub連携
-  document.getElementById('btnSaveGithubToken').addEventListener('click', () => {
-    const val = document.getElementById('githubTokenInput').value.trim();
-    AppState.github.token = val;
-    localStorage.setItem('ba_github_token', val);
-    alert('GitHubトークンを保存しました。');
-  });
-  document.getElementById('btnPushToGithub').addEventListener('click', pushCustomStudentsToGitHub);
-
-  // 設定モーダル
-  document.getElementById('btnOpenSettings').addEventListener('click', () => {
-    const modal = document.getElementById('modalSettings');
-    if (AppState.config.rate === 0.06) {
-      document.getElementById('settingsRate6').checked = true;
-    } else {
-      document.getElementById('settingsRate3').checked = true;
-    }
-    renderSettingsPickupTags();
-    modal.showModal();
-  });
-  document.getElementById('btnCloseSettingsModal').addEventListener('click', () => {
-    document.getElementById('modalSettings').close();
-  });
-  document.getElementById('btnSaveSettings').addEventListener('click', () => {
-    const rateVal = parseFloat(document.querySelector('input[name="settingsRateRadio"]:checked').value);
-    AppState.config.rate = rateVal;
-    persistState();
-    updateAllStats();
-    renderConvergenceChart();
-    document.getElementById('modalSettings').close();
-  });
-  document.getElementById('btnResetAllData').addEventListener('click', () => {
-    if (confirm('【警告】ガチャ履歴データを全て消去します。本当によろしいですか？')) {
-      AppState.pulls = [];
-      persistState();
-      updateAllStats();
-      document.getElementById('modalSettings').close();
-      showWelcomeView();
-    }
-  });
-
-  // 配信モード切り替え
-  document.getElementById('btnToggleStreamMode').addEventListener('click', () => {
-    const overlay = document.getElementById('streamOverlayLayer');
-    overlay.style.display = overlay.style.display === 'none' ? 'flex' : 'none';
-  });
-  document.getElementById('btnExitStreamMode').addEventListener('click', () => {
-    document.getElementById('streamOverlayLayer').style.display = 'none';
-  });
-
-  // テーマ切り替え (タクティカルHUDダーク ⇔ ライト)
-  const btnTheme = document.getElementById('btnToggleTheme');
-  if (btnTheme) {
-    btnTheme.addEventListener('click', () => {
-      const isDark = document.body.classList.contains('theme-tactical-dark');
-      if (isDark) {
-        document.body.classList.remove('theme-tactical-dark');
-        document.body.classList.add('theme-light');
-        localStorage.setItem('ba_theme', 'light');
-      } else {
-        document.body.classList.remove('theme-light');
-        document.body.classList.add('theme-tactical-dark');
-        localStorage.setItem('ba_theme', 'dark');
-      }
-      renderConvergenceChart();
-    });
-
-    const savedTheme = localStorage.getItem('ba_theme');
-    if (savedTheme === 'light') {
-      document.body.classList.remove('theme-tactical-dark');
-      document.body.classList.add('theme-light');
-    }
-  }
-
-  // 小窓ポップアウト機能 (配信用独立ウィンドウ)
-  const btnPopout = document.getElementById('btnPopoutWindow');
-  if (btnPopout) {
-    btnPopout.addEventListener('click', () => {
-      const url = new URL(window.location.href);
-      url.searchParams.set('popout', '1');
-      window.open(url.toString(), 'BA_Gacha_Live_Compact', 'width=520,height=820,menubar=no,toolbar=no,location=no,status=no,resizable=yes');
-    });
-  }
-
-  // 小窓表示フラグがある場合はbodyにwindow-popoutクラスを付与
-  if (new URLSearchParams(window.location.search).get('popout') === '1') {
-    document.body.classList.add('window-popout');
-  }
-
-  // 仮登録JSONエクスポート・インポート
-  document.getElementById('btnExportCustomJson').addEventListener('click', () => {
-    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify({ students: AppState.customStudents }, null, 2));
-    const dlAnchor = document.createElement('a');
-    dlAnchor.setAttribute("href", dataStr);
-    dlAnchor.setAttribute("download", `custom_students_${new Date().toISOString().slice(0, 10)}.json`);
-    document.body.appendChild(dlAnchor);
-    dlAnchor.click();
-    dlAnchor.remove();
-  });
-
-  const importInput = document.getElementById('importCustomFileInput');
-  document.getElementById('btnImportCustomJson').addEventListener('click', () => {
-    importInput.click();
-  });
-  importInput.addEventListener('change', (e) => {
-    if (e.target.files && e.target.files[0]) {
-      const reader = new FileReader();
-      reader.onload = (evt) => {
-        try {
-          const parsed = JSON.parse(evt.target.result);
-          if (parsed && parsed.students) {
-            AppState.customStudents = Object.assign(AppState.customStudents, parsed.students);
-            persistState();
-            renderCustomStudentsTable();
-            alert('仮登録生徒データをインポートしました！');
-          } else {
-            alert('JSONフォーマットが正しくありません。（studentsオブジェクトが必要です）');
-          }
-        } catch (err) {
-          alert('JSONの解析に失敗しました: ' + err.message);
-        }
-      };
-      reader.readAsText(e.target.files[0]);
-    }
-  });
-
-  // PU生徒追加フォーム
-  initPickupStudentSetup();
-}
-
-/**
- * 初期設定画面でのピックアップ生徒追加
- */
-function initPickupStudentSetup() {
-  const input = document.getElementById('pickupStudentInput');
-  const btnAdd = document.getElementById('btnAddPickupStudent');
-  const dropdown = document.getElementById('pickupSuggestDropdown');
-
-  if (!input || !btnAdd) return;
-
-  function addPickup(name) {
-    const norm = normalizeStudentName(name);
-    if (norm && !AppState.config.pickupStudents.includes(norm)) {
-      AppState.config.pickupStudents.push(norm);
-      renderWelcomePickupTags();
-      persistState();
-    }
-    input.value = '';
-    dropdown.style.display = 'none';
-  }
-
-  btnAdd.addEventListener('click', () => addPickup(input.value));
-  input.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      addPickup(input.value);
-    }
-  });
-
-  input.addEventListener('input', (e) => {
-    const val = e.target.value.trim();
-    if (!val) {
-      dropdown.style.display = 'none';
-      return;
-    }
-    const matches = searchStudents(val);
-    dropdown.innerHTML = '';
-    if (matches.length > 0) {
-      matches.slice(0, 8).forEach(name => {
-        const div = document.createElement('div');
-        div.className = 'guide-item';
-        div.innerHTML = `
-          <img src="${getStudentIconUrl(name)}" class="guide-avatar" onerror="this.src='data:image/svg+xml,<svg xmlns=\\'http://www.w3.org/2000/svg\\' viewBox=\\'0 0 32 32\\'><circle cx=\\'16\\' cy=\\'16\\' r=\\'15\\' fill=\\'%23e2e8f0\\'/></svg>'">
-          <span class="guide-name">${escapeHtml(name)}</span>
-        `;
-        div.addEventListener('click', () => addPickup(name));
-        dropdown.appendChild(div);
-      });
-      dropdown.style.display = 'block';
-    } else {
-      dropdown.style.display = 'none';
-    }
-  });
-
-  renderWelcomePickupTags();
-}
-
-function renderWelcomePickupTags() {
-  const wrap = document.getElementById('pickupTagsWrap');
-  if (!wrap) return;
-  wrap.innerHTML = '';
-
-  AppState.config.pickupStudents.forEach(name => {
-    const tag = document.createElement('span');
-    tag.className = 'pickup-tag';
-    tag.innerHTML = `
-      <img src="${getStudentIconUrl(name)}" class="pickup-tag-avatar" onerror="this.src='data:image/svg+xml,<svg xmlns=\\'http://www.w3.org/2000/svg\\' viewBox=\\'0 0 32 32\\'><circle cx=\\'16\\' cy=\\'16\\' r=\\'15\\' fill=\\'%23e2e8f0\\'/></svg>'">
-      <span>${escapeHtml(name)}</span>
-      <span class="pickup-tag-remove" data-name="${escapeHtml(name)}">✕</span>
-    `;
-    tag.querySelector('.pickup-tag-remove').addEventListener('click', () => {
-      AppState.config.pickupStudents = AppState.config.pickupStudents.filter(n => n !== name);
-      renderWelcomePickupTags();
-      persistState();
-    });
-    wrap.appendChild(tag);
-  });
-}
-
-function renderSettingsPickupTags() {
-  const wrap = document.getElementById('settingsPickupTags');
-  if (!wrap) return;
-  wrap.innerHTML = '';
-
-  AppState.config.pickupStudents.forEach(name => {
-    const tag = document.createElement('span');
-    tag.className = 'pickup-tag';
-    tag.innerHTML = `
-      <span>${escapeHtml(name)}</span>
-      <span class="pickup-tag-remove" data-name="${escapeHtml(name)}">✕</span>
-    `;
-    tag.querySelector('.pickup-tag-remove').addEventListener('click', () => {
-      AppState.config.pickupStudents = AppState.config.pickupStudents.filter(n => n !== name);
-      renderSettingsPickupTags();
-      persistState();
-    });
-    wrap.appendChild(tag);
-  });
-}
-
-function renderWelcomeForm() {
-  document.getElementById('initChargeInput').value = AppState.config.initCharge;
-  renderWelcomePickupTags();
-}
-
-function escapeHtml(str) {
-  if (!str) return '';
-  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
