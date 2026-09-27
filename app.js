@@ -4,7 +4,7 @@
  * Core Application Logic & State Management
  */
 
-const APP_VERSION = 'v1.0.4';
+const APP_VERSION = 'v1.0.6';
 const REMOTE_STUDENT_ICONS_URL = 'https://raw.githubusercontent.com/roundabout-oxygen/ba_gacha_tabulation/main/data/student_icons.json';
 
 // アプリケーション全体の状態管理
@@ -128,29 +128,44 @@ function loadDemoGachaData() {
   AppState.config.initCharge = 94; // 添付2枚目: 累計1〜10、チャージ95〜104
   AppState.config.pickupStudents = ['ココロ'];
 
-  const names = ['', '', '', '', '', 'ヒナ', '', '', '', 'ココロ'];
-  let runningCharge = 94;
+  // 30連分のガチャ履歴（1〜30連）
+  // 10連目: 6人目にヒナ(100連目50%すり抜け)、10人目にココロ(PU獲得)
+  // 20連目: 5人目にネル（制服）(新規獲得)
+  // 30連目: 3人目にネル（制服）(2回目被り)、9人目にヒナ(2回目被り)
+  const names = [
+    '', '', '', '', '', 'ヒナ', '', '', '', 'ココロ',
+    '', '', '', '', 'ネル（制服）', '', '', '', '', '',
+    '', '', 'ネル（制服）', '', '', '', '', '', 'ヒナ', ''
+  ];
 
+  let runningCharge = 94;
   const demoPulls = [];
-  for (let i = 0; i < 10; i++) {
-    const seq = i + 1;
+
+  for (let i = 0; i < names.length; i++) {
+    const seqInBatch = (i % 10) + 1;
+    const batchIndex = Math.floor(i / 10) + 1;
+    const totalIndex = i + 1;
     runningCharge += 1;
+
     const name = names[i];
     const isPick = (name === 'ココロ');
     const isThreeStar = Boolean(name);
     const isGuaranteed50 = (runningCharge === 100);
 
+    // 過去に登場したか判定
+    const isAlreadyPulled = demoPulls.some(p => p.studentName === name);
+
     demoPulls.push({
-      id: i + 1,
+      id: totalIndex,
       pullType: '10',
-      batchId: 'demo_batch_1',
-      seqInBatch: seq,
-      totalPullIndex: seq,
+      batchId: `demo_batch_${batchIndex}`,
+      seqInBatch: seqInBatch,
+      totalPullIndex: totalIndex,
       charge: runningCharge,
       studentName: name,
       isThreeStar: isThreeStar,
       isPick: isPick,
-      isNew: isThreeStar,
+      isNew: isThreeStar && !isAlreadyPulled,
       isGuaranteed50: isGuaranteed50,
       isGuaranteed100: false,
       createdAt: new Date().toISOString()
@@ -496,30 +511,71 @@ function renderInputSheetTable() {
     tdCharge.textContent = chargeLabel;
     tr.appendChild(tdCharge);
 
-    // 4. 生徒名入力欄 (プレースホルダーなし・枠色と形で入力欄と明示)
+    // 4. 生徒名入力欄 (プレースホルダーなし・枠色と形で入力欄と明示・左側に生徒アイコン表示)
     const tdName = document.createElement('td');
     tdName.className = 'col-name';
     const inputWrap = document.createElement('div');
     inputWrap.className = 'sheet-student-input-wrap';
 
+    // 確定時に名前の左に表示される生徒アイコンサムネイル枠
+    const avatarSlot = document.createElement('div');
+    avatarSlot.className = 'sheet-student-avatar-slot';
+    avatarSlot.id = `avatarSlot_${idx}`;
+    const avatarImg = document.createElement('img');
+    avatarImg.className = 'sheet-student-avatar-img';
+    avatarImg.alt = '';
+    avatarSlot.appendChild(avatarImg);
+    inputWrap.appendChild(avatarSlot);
+
     const inputName = document.createElement('input');
     inputName.type = 'text';
     inputName.className = 'sheet-student-input';
     inputName.value = row.studentName;
+    // ブラウザの検索履歴・オートコンプリート候補の徹底無効化
     inputName.autocomplete = 'off';
+    inputName.setAttribute('autocomplete', 'new-password');
+    inputName.setAttribute('autocorrect', 'off');
+    inputName.setAttribute('autocapitalize', 'off');
+    inputName.setAttribute('spellcheck', 'false');
+    inputName.setAttribute('data-lpignore', 'true');
+    inputName.setAttribute('data-form-type', 'other');
+    inputName.setAttribute('aria-autocomplete', 'none');
+    inputName.name = `student_pull_${idx}_${Date.now()}`;
     inputName.dataset.rowIndex = idx;
+
+    // 生徒アイコン表示更新関数
+    function updateRowAvatar(val) {
+      if (!val || !val.trim()) {
+        avatarSlot.classList.remove('visible');
+        avatarImg.src = '';
+        return;
+      }
+      const iconUrl = getStudentIconUrl(val.trim());
+      if (iconUrl) {
+        avatarImg.src = iconUrl;
+        avatarSlot.classList.add('visible');
+      } else {
+        avatarSlot.classList.remove('visible');
+        avatarImg.src = '';
+      }
+    }
 
     if (row.studentName) {
       inputName.classList.add('has-value');
       if (row.isPick) inputName.classList.add('is-pickup');
+      updateRowAvatar(row.studentName);
     }
 
     // 入力イベント
     inputName.addEventListener('input', (e) => {
       onStudentInputChange(idx, e.target.value);
+      updateRowAvatar(e.target.value);
     });
     inputName.addEventListener('focus', (e) => {
       showStudentGuidePopup(inputName, idx);
+    });
+    inputName.addEventListener('blur', (e) => {
+      updateRowAvatar(e.target.value);
     });
     inputName.addEventListener('keydown', (e) => {
       handleSuggestKeyNavigation(e, idx);
@@ -681,12 +737,38 @@ function updateStudentGuidePopup(inputEl, query, rowIndex) {
     listEl.appendChild(item);
   });
 
-  // ポップアップ位置計算
-  const rect = inputEl.getBoundingClientRect();
+  // ポップアップ位置計算 (ユーザー要望: IME変換候補・履歴と絶対に被らないよう右側に配置)
   popup.style.display = 'flex';
-  popup.style.top = `${rect.bottom + window.scrollY + 4}px`;
-  popup.style.left = `${rect.left + window.scrollX}px`;
-  popup.style.width = `${Math.max(rect.width, 220)}px`;
+  const rect = inputEl.getBoundingClientRect();
+  const popupWidth = 210;
+  const popupHeight = Math.min(230, popup.scrollHeight || 210);
+
+  // 1. 水平位置 (左右) の決定
+  // 右側に十分なスペースがあれば入力欄の右隣に配置
+  // 画面幅が狭い小窓の場合は画面右端に寄せて配置し、入力中の文字＆上下のIME変換候補領域と完全分離
+  const spaceRight = window.innerWidth - rect.right;
+  let leftPos;
+
+  if (spaceRight >= popupWidth + 10) {
+    leftPos = rect.right + 6;
+  } else {
+    // 小窓時: 画面右端にピッタリ配置（入力欄の左側の文字入力部＆IME候補とは完全に被らない）
+    leftPos = window.innerWidth - popupWidth - 8;
+    leftPos = Math.max(4, leftPos);
+  }
+
+  // 2. 垂直位置 (上下) の決定 (position: fixed なのでビューポート基準)
+  // 通常は入力欄の上端 (rect.top) に合わせる
+  // 画面下端をはみ出る場合（下側の行など）は、ポップアップの下端を入力欄の下端に合わせて上方向に展開
+  let topPos = rect.top;
+  const maxAllowedBottom = window.innerHeight - 10;
+  if (rect.top + popupHeight > maxAllowedBottom) {
+    topPos = Math.max(10, rect.bottom - popupHeight);
+  }
+
+  popup.style.top = `${topPos}px`;
+  popup.style.left = `${leftPos}px`;
+  popup.style.width = `${popupWidth}px`;
 }
 
 function selectSuggestStudent(rowIndex, name) {
@@ -695,6 +777,19 @@ function selectSuggestStudent(rowIndex, name) {
     inputEl.value = name;
   }
   onStudentInputChange(rowIndex, name);
+
+  // 左側の生徒アイコンを即時更新！
+  const avatarSlot = document.getElementById(`avatarSlot_${rowIndex}`);
+  if (avatarSlot) {
+    const avatarImg = avatarSlot.querySelector('.sheet-student-avatar-img');
+    const iconUrl = getStudentIconUrl(name);
+    if (iconUrl && avatarImg) {
+      avatarImg.src = iconUrl;
+      avatarSlot.classList.add('visible');
+    } else {
+      avatarSlot.classList.remove('visible');
+    }
+  }
 
   const popup = document.getElementById('studentInputGuidePopup');
   if (popup) popup.style.display = 'none';
@@ -1005,12 +1100,18 @@ function renderConvergenceChart() {
 // 生徒図鑑 & 履歴テーブル
 // ==========================================================================
 
+// ==========================================================================
+// 排出された☆３生徒一覧 (添付2枚目準拠: 横3列・古い順・日付なし・省スペース)
+// ==========================================================================
+
 function renderDirectoryGrid() {
-  const container = document.getElementById('dashStudentsGrid');
-  const emptyHint = document.getElementById('dashStudentsEmpty');
-  const countEl = document.getElementById('dashStudentsTotalCount');
+  const container = document.getElementById('threeStarCardsGrid') || document.getElementById('dashStudentsGrid');
   if (!container) return;
 
+  const emptyHint = document.getElementById('threeStarEmptyHint') || document.getElementById('dashStudentsEmpty');
+  const countEl = document.getElementById('dashStudentsTotalCount');
+
+  // 時系列順 (古いものが左上、新しいものは右下に追加される昇順)
   const threeStarPulls = AppState.pulls.filter(p => p.isThreeStar);
   if (countEl) countEl.textContent = threeStarPulls.length;
 
@@ -1024,59 +1125,75 @@ function renderDirectoryGrid() {
   if (emptyHint) emptyHint.style.display = 'none';
   container.innerHTML = '';
 
+  // 生徒名ごとの累積出現回数マップ
+  const studentOccurrenceCounts = {};
+
   threeStarPulls.forEach(pull => {
+    const sName = pull.studentName;
+    const norm = normalizeStudentName(sName);
+    studentOccurrenceCounts[norm] = (studentOccurrenceCounts[norm] || 0) + 1;
+    const currentCount = studentOccurrenceCounts[norm];
+
+    // カード生成 (添付2枚目完全再現)
     const card = document.createElement('div');
-    card.className = 'student-card-item';
+    card.className = 'three-star-item-card';
+
+    // 種別テキスト & 枠線クラス判定 (添付2枚目準拠)
+    let typeText = 'すり抜け(被り)';
+    let borderClass = 'border-regular';
 
     if (pull.charge === 200) {
-      card.classList.add('status-100');
+      typeText = '交換';
+      borderClass = 'border-exchange';
     } else if (pull.isPick) {
-      card.classList.add('status-pu');
+      typeText = 'ピックアップ';
+      borderClass = 'border-pickup';
     } else if (pull.isGuaranteed50) {
-      card.classList.add('status-fifty');
-    } else if (pull.isNew) {
-      card.classList.add('status-new');
+      typeText = 'すり抜け(50%)';
+      borderClass = 'border-fifty';
+    } else if (pull.isNew || currentCount === 1) {
+      typeText = '新規獲得';
+      borderClass = 'border-new';
+    } else {
+      typeText = 'すり抜け(被り)';
+      borderClass = 'border-regular';
     }
 
-    const iconUrl = getStudentIconUrl(pull.studentName);
-    const img = document.createElement('img');
-    img.className = 'student-card-avatar';
-    img.src = iconUrl || 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" fill="%2300aeef"><rect width="100%" height="100%" fill="%23e6f7fd"/><text x="50%" y="55%" font-size="12" font-family="sans-serif" text-anchor="middle" fill="%2300aeef">★3</text></svg>';
-    card.appendChild(img);
+    card.classList.add(borderClass);
 
+    // 1. アイコンラッパー
+    const avatarWrap = document.createElement('div');
+    avatarWrap.className = 'ts-card-avatar-wrap';
+
+    const iconUrl = getStudentIconUrl(sName);
+    const img = document.createElement('img');
+    img.className = 'ts-card-avatar';
+    img.src = iconUrl || 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" fill="%2300aeef"><rect width="100%" height="100%" fill="%23e6f7fd"/><text x="50%" y="58%" font-size="12" font-family="sans-serif" font-weight="bold" text-anchor="middle" fill="%2300aeef">★3</text></svg>';
+    avatarWrap.appendChild(img);
+
+    // 2回目・3回目バッジ (添付2枚目再現)
+    if (currentCount > 1) {
+      const countBadge = document.createElement('span');
+      countBadge.className = 'ts-card-count-badge';
+      countBadge.textContent = `${currentCount}回目`;
+      avatarWrap.appendChild(countBadge);
+    }
+
+    card.appendChild(avatarWrap);
+
+    // 2. 生徒名 (太字・中央)
     const nameEl = document.createElement('div');
-    nameEl.className = 'student-card-name';
-    nameEl.textContent = pull.studentName;
+    nameEl.className = 'ts-card-name';
+    nameEl.textContent = sName;
+    nameEl.title = sName;
     card.appendChild(nameEl);
 
-    const tagsEl = document.createElement('div');
-    tagsEl.className = 'student-card-tags';
+    // 3. 種別テキスト (日付は削除して高さを詰める)
+    const typeEl = document.createElement('div');
+    typeEl.className = 'ts-card-type-text';
+    typeEl.textContent = typeText;
+    card.appendChild(typeEl);
 
-    if (pull.charge === 200) {
-      const tag = document.createElement('span');
-      tag.className = 'card-mini-tag dir-badge dir-exchange';
-      tag.textContent = '天井';
-      tagsEl.appendChild(tag);
-    } else if (pull.isPick) {
-      const tag = document.createElement('span');
-      tag.className = 'card-mini-tag dir-badge dir-pu';
-      tag.textContent = 'PU';
-      tagsEl.appendChild(tag);
-    } else if (pull.isGuaranteed50) {
-      const tag = document.createElement('span');
-      tag.className = 'card-mini-tag dir-badge dir-fifty';
-      tag.textContent = '50%';
-      tagsEl.appendChild(tag);
-    }
-
-    if (pull.isNew) {
-      const tag = document.createElement('span');
-      tag.className = 'card-mini-tag dir-badge dir-new';
-      tag.textContent = '新';
-      tagsEl.appendChild(tag);
-    }
-
-    card.appendChild(tagsEl);
     container.appendChild(card);
   });
 }

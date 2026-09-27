@@ -26,7 +26,7 @@
           <div class="brand-logo-icon">G</div>
           <div class="brand-titles">
             <h1 class="brand-name">シャーレ ガチャ集計</h1>
-            <span class="version-badge" id="appVersionBadge">v1.0.4</span>
+            <span class="version-badge" id="appVersionBadge">v1.0.6</span>
           </div>
         </div>
         <div class="header-right-tools">
@@ -35,52 +35,60 @@
         </div>
       </div>
 
-      <!-- 簡易集計データステータスバー (端的に重要指標のみ表示) -->
-      <div class="mini-stats-bar" id="miniStatsBar">
-        <!-- 総ガチャ回数 -->
-        <div class="stat-box" title="総ガチャ回数と消費青輝石">
-          <span class="stat-lbl">総ガチャ回数</span>
-          <div class="stat-num"><span id="liveStatTotalPulls">0</span><small>連</small></div>
-          <span class="stat-sub"><b id="liveStatPyroxene">0</b> 石</span>
-        </div>
-
-        <!-- ☆３確率 -->
-        <div class="stat-box" title="☆３排出率">
-          <span class="stat-lbl">☆３確率</span>
-          <div class="stat-num text-cyan"><span id="liveStatThreeStarRate">0.00</span><small>%</small></div>
-          <span class="stat-sub"><b id="liveStatThreeStarCount">0</b>人 (<span id="liveStatThreeStarDiff">+0.0</span>)</span>
-        </div>
-
-        <!-- PU確率 -->
-        <div class="stat-box" title="ピックアップ生徒排出率">
-          <span class="stat-lbl">PU確率</span>
-          <div class="stat-num text-gold"><span id="liveStatPickupRate">0.00</span><small>%</small></div>
-          <span class="stat-sub"><b id="liveStatPickupCount">0</b>人 (期待: <span id="liveStatPickupExpected">0.0</span>)</span>
-        </div>
-
-        <!-- 50%勝率 -->
-        <div class="stat-box" title="100連目50%枠の勝率">
-          <span class="stat-lbl">50%勝率</span>
-          <div class="stat-num text-green"><span id="liveStatWinRate">0.0</span><small>%</small></div>
-          <span class="stat-sub"><b id="liveStatWinCount">0</b>勝 <b id="liveStatLossCount">0</b>敗 (<span id="liveStatFiftyTotal">0</span>回)</span>
-        </div>
-
-        <!-- チャージ -->
-        <div class="stat-box stat-charge-box" title="現在のチャージ進行度">
-          <div class="charge-top-line">
-            <span class="stat-lbl">チャージ</span>
-            <span class="charge-val-text" id="liveStatChargeText">0 / 100</span>
+      <!-- 添付1枚目準拠: 省スペース集計ステータスグリッド (上段3分割・下段2分割) -->
+      <div class="compact-stats-grid" id="miniStatsBar">
+        <!-- 1段目 左: ☆３確率 -->
+        <div class="cstat-cell">
+          <div class="cstat-lbl">☆３確率</div>
+          <div class="cstat-val-row">
+            <span class="cstat-main-num text-cyan"><span id="liveStatThreeStarRate">0.00</span>%</span>
+            <span class="cstat-sub-txt"><b id="liveStatThreeStarCount">0</b>人</span>
           </div>
-          <div class="charge-meter-bg">
-            <div class="charge-meter-fill" id="liveChargeProgressFill" style="width: 0%;"></div>
+        </div>
+
+        <!-- 1段目 中: 累計 -->
+        <div class="cstat-cell">
+          <div class="cstat-lbl">累計</div>
+          <div class="cstat-val-row">
+            <span class="cstat-main-num"><span id="liveStatTotalPulls">0</span> 連</span>
+            <span class="cstat-sub-txt"><b id="liveStatPyroxene">0</b> 石</span>
           </div>
-          <span class="stat-sub" id="liveChargeSub">あと 100連</span>
+        </div>
+
+        <!-- 1段目 右: PU確率 -->
+        <div class="cstat-cell">
+          <div class="cstat-lbl">PU確率</div>
+          <div class="cstat-val-row">
+            <span class="cstat-main-num text-gold"><span id="liveStatPickupRate">0.00</span>%</span>
+            <span class="cstat-sub-txt"><b id="liveStatPickupCount">0</b>人 (期待: <span id="liveStatPickupExpected">0.0</span>)</span>
+          </div>
+        </div>
+
+        <!-- 2段目 左: チャージ (2列分幅広) -->
+        <div class="cstat-cell cstat-charge-cell">
+          <div class="ccharge-header">
+            <span class="cstat-lbl">チャージ</span>
+            <span class="ccharge-val-num" id="liveStatChargeText">0 / 100</span>
+          </div>
+          <div class="ccharge-bar-track">
+            <div class="ccharge-bar-fill" id="liveChargeProgressFill" style="width: 0%;"></div>
+          </div>
+          <div class="ccharge-foot-txt" id="liveChargeSub">あと 100連</div>
+        </div>
+
+        <!-- 2段目 右: 50%勝率 -->
+        <div class="cstat-cell cstat-win-cell">
+          <div class="cstat-lbl">50%勝率</div>
+          <div class="cstat-val-row">
+            <span class="cstat-main-num text-green"><span id="liveStatWinRate">0.0</span>%</span>
+            <span class="cstat-sub-txt"><b id="liveStatWinCount">0</b>勝 <b id="liveStatLossCount">0</b>敗 (<span id="liveStatFiftyTotal">0</span>回)</span>
+          </div>
         </div>
       </div>
     </header>
 
     <!-- ========================================================================= -->
-    <!-- メインナビゲーションタブ（簡易集計データの下） -->
+    <!-- メインナビゲーションタブ（下の領域と一体化するインデックスフォルダ型UI） -->
     <!-- ========================================================================= -->
     <nav class="main-tabs-nav" id="mainTabsNav">
       <button class="nav-tab-btn active" data-tab="tabDashboard">
@@ -100,69 +108,13 @@
     <main class="app-main-viewport">
 
       <!-- ======================================================================= -->
-      <!-- タブ1: 集計ダッシュボード (水色基調 ba_gacha_tabulation 継承UI) -->
+      <!-- タブ1: 集計ダッシュボード (添付2枚目準拠: 排出☆３生徒一覧 横3列・古い順) -->
       <!-- ======================================================================= -->
       <section class="tab-view-content active" id="tabDashboard">
-        <!-- 4大統計カードグリッド -->
-        <div class="stats-cards-grid">
-          <!-- カード1: 総ガチャ回数 -->
-          <div class="cyan-card stat-summary-card">
-            <div class="card-top-header">
-              <span class="card-head-title">総ガチャ回数 / 消費青輝石</span>
-              <span class="card-head-badge">💎 石</span>
-            </div>
-            <div class="card-primary-val">
-              <span id="dashTotalPulls">0</span> <span class="val-unit">連</span>
-            </div>
-            <div class="card-foot-sub">
-              <span>消費: <b id="dashTotalPyroxene">0</b> 個</span>
-              <span>(10連: <span id="dashTenPullsCount">0</span>回 / 単発: <span id="dashSinglePullsCount">0</span>回)</span>
-            </div>
-          </div>
-
-          <!-- カード2: ☆３確率 -->
-          <div class="cyan-card stat-summary-card">
-            <div class="card-top-header">
-              <span class="card-head-title" id="dashThreeStarTitle">☆３確率</span>
-              <span class="card-head-badge badge-rate" id="dashThreeStarBadge">3%枠</span>
-            </div>
-            <div class="card-primary-val text-cyan">
-              <span id="dashThreeStarRate">0.00</span> <span class="val-unit">%</span>
-            </div>
-            <div class="card-foot-sub" id="dashThreeStarSub">
-              <span>獲得: <b id="dashThreeStarCount">0</b> 名</span>
-              <span>期待値差: <b id="dashThreeStarDiffVal">+0.0</b> 名 (<span id="dashLuckEvaluation">普通</span>)</span>
-            </div>
-          </div>
-
-          <!-- カード3: PU確率 -->
-          <div class="cyan-card stat-summary-card">
-            <div class="card-top-header">
-              <span class="card-head-title">PU確率</span>
-              <span class="card-head-badge badge-pu">0.7%</span>
-            </div>
-            <div class="card-primary-val text-gold">
-              <span id="dashPickupRate">0.00</span> <span class="val-unit">%</span>
-            </div>
-            <div class="card-foot-sub">
-              <span>獲得: <b id="dashPickupCount">0</b> 名 (期待: <span id="dashPickupExpected">0.0</span>)</span>
-              <span>自力: <span id="dashNaturalPickupCount">0</span> / 天井: <span id="dashCeilingPickupCount">0</span></span>
-            </div>
-          </div>
-
-          <!-- カード4: 50%勝率 -->
-          <div class="cyan-card stat-summary-card">
-            <div class="card-top-header">
-              <span class="card-head-title">50%勝率</span>
-              <span class="card-head-badge badge-win">100連目</span>
-            </div>
-            <div class="card-primary-val text-green">
-              <span id="dashWinRate">0.0</span> <span class="val-unit">%</span>
-            </div>
-            <div class="card-foot-sub">
-              <span>勝: <b id="dashWinsCount" style="color:var(--success);">0</b> / 敗: <b id="dashLossesCount" style="color:var(--secondary);">0</b></span>
-              <span>(計 <span id="dashFiftyTotalCount">0</span> 回)</span>
-            </div>
+        <!-- 排出された☆３生徒一覧（添付2枚目再現・横3列・古い順・日付なし・タイトルなしで省スペース） -->
+        <div class="three-star-section-box" id="threeStarSectionBox">
+          <div class="three-star-grid-3cols" id="threeStarCardsGrid">
+            <div class="empty-hint" id="threeStarEmptyHint">まだ☆3生徒は排出されていません</div>
           </div>
         </div>
 
@@ -203,23 +155,6 @@
               <div class="analysis-val text-cyan" id="dashCurrentChargeVal">0 <small>/ 100</small></div>
               <span class="analysis-sub-txt" id="dashChargeRemainingText">あと 100連</span>
             </div>
-          </div>
-        </div>
-
-        <!-- 排出☆3生徒図鑑 (ba_gacha_tabulation 継承・横並びカード) -->
-        <div class="cyan-card directory-section-card">
-          <div class="directory-section-header">
-            <div class="card-head-title">排出☆3生徒図鑑 (<span id="dashStudentsTotalCount">0</span> 名)</div>
-            <div class="directory-badges-legend">
-              <span class="dir-badge dir-pu">🟡 PU</span>
-              <span class="dir-badge dir-new">🔴 新規</span>
-              <span class="dir-badge dir-fifty">🟢 50%</span>
-              <span class="dir-badge dir-exchange">⚫ 天井</span>
-              <span class="dir-badge dir-regular">⚪ 通常</span>
-            </div>
-          </div>
-          <div class="directory-students-flex" id="dashStudentsGrid">
-            <div class="empty-hint" id="dashStudentsEmpty">まだ☆3生徒は排出されていません</div>
           </div>
         </div>
 

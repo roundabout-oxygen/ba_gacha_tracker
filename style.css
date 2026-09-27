@@ -226,136 +226,137 @@ body {
   box-shadow: var(--shadow-neon-pink);
 }
 
-/* 簡易集計データステータスバー (配信対応・端的な重要指標) */
-.mini-stats-bar {
+/* ==========================================================================
+   1. 添付1枚目準拠: 省スペース集計ステータスグリッド (上段3分割・下段2分割)
+   ========================================================================== */
+.compact-stats-grid {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 8px;
-  background: rgba(0, 174, 239, 0.04);
-  border: 1px solid var(--border);
+  grid-template-columns: 1fr 1fr 1.2fr;
+  background: var(--bg-card);
+  border: 1.5px solid var(--border);
   border-radius: var(--radius-md);
-  padding: 8px 10px;
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
 }
 
-.stat-box {
+.cstat-cell {
+  padding: 5px 8px;
+  border-right: 1px solid rgba(0, 174, 239, 0.15);
+  border-bottom: 1px solid rgba(0, 174, 239, 0.15);
   display: flex;
   flex-direction: column;
   justify-content: center;
-  padding: 4px 6px;
-  border-right: 1px solid rgba(0, 174, 239, 0.12);
   min-width: 0;
 }
 
-.stat-box:last-child {
+.cstat-cell:nth-child(3) {
   border-right: none;
 }
 
-.stat-lbl {
+.cstat-lbl {
   font-size: 11px;
   font-weight: 700;
   color: var(--text-muted);
-  white-space: nowrap;
-  letter-spacing: 0.3px;
+  line-height: 1.2;
 }
 
-.stat-num {
+.cstat-val-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.cstat-main-num {
   font-family: var(--font-mono);
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 800;
-  line-height: 1.15;
+  line-height: 1.2;
   color: var(--text-main);
   white-space: nowrap;
 }
 
-.stat-num small {
-  font-size: 11px;
-  font-weight: 600;
-  margin-left: 2px;
-}
-
-.stat-sub {
+.cstat-sub-txt {
   font-size: 10.5px;
   color: var(--text-muted);
   white-space: nowrap;
-  margin-top: 1px;
 }
 
-.text-cyan {
-  color: var(--primary) !important;
+/* チャージセル (2列幅) */
+.cstat-charge-cell {
+  grid-column: span 2;
+  border-bottom: none;
 }
 
-.text-gold {
-  color: var(--gold) !important;
-}
-
-.text-green {
-  color: var(--success) !important;
-}
-
-/* チャージボックスのメーター表示 */
-.stat-charge-box {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-}
-
-.charge-top-line {
+.ccharge-header {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
 }
 
-.charge-val-text {
+.ccharge-val-num {
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 700;
   color: var(--primary);
 }
 
-.charge-meter-bg {
+.ccharge-bar-track {
   width: 100%;
-  height: 6px;
+  height: 5px;
   background: rgba(0, 0, 0, 0.08);
   border-radius: 4px;
   overflow: hidden;
   margin: 3px 0 2px;
 }
 
-body.theme-tactical-dark .charge-meter-bg {
-  background: rgba(255, 255, 255, 0.1);
+body.theme-tactical-dark .ccharge-bar-track {
+  background: rgba(255, 255, 255, 0.12);
 }
 
-.charge-meter-fill {
+.ccharge-bar-fill {
   height: 100%;
   background: linear-gradient(90deg, var(--primary), var(--accent-blue));
   border-radius: 4px;
   transition: width 0.3s ease;
 }
 
+.ccharge-foot-txt {
+  font-size: 10px;
+  color: var(--text-muted);
+  line-height: 1.1;
+}
+
+/* 50%勝率セル (1列幅) */
+.cstat-win-cell {
+  border-right: none;
+  border-bottom: none;
+}
+
 /* ==========================================================================
-   2. メインナビゲーションタブ (簡易集計の直下配置: 集計 / ガチャを引く / ⚙)
+   2. メインナビゲーションタブ (下の領域と一体化するインデックスフォルダ型UI)
    ========================================================================== */
 .main-tabs-nav {
   display: flex;
-  gap: 6px;
-  background: var(--bg-card);
-  padding: 5px;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--border);
-  box-shadow: var(--shadow-sm);
+  gap: 4px;
+  padding: 0 4px;
+  margin-top: 2px;
+  margin-bottom: -1.5px; /* 下のコンテンツ枠線と重ねてシームレス結合 */
+  position: relative;
+  z-index: 10;
 }
 
 .nav-tab-btn {
-  flex: 1;
-  background: transparent;
-  border: none;
+  background: rgba(0, 174, 239, 0.08);
+  border: 1.5px solid var(--border-strong);
+  border-bottom: 1.5px solid var(--border-strong);
+  border-radius: 8px 8px 0 0; /* 上部角丸のフォルダインデックス形状 */
   color: var(--text-muted);
-  padding: 9px 14px;
-  font-size: 14px;
+  padding: 8px 18px;
+  font-size: 13.5px;
   font-weight: 700;
-  border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: var(--transition);
+  transition: all 0.2s ease;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -363,66 +364,238 @@ body.theme-tactical-dark .charge-meter-bg {
   white-space: nowrap;
 }
 
-.nav-tab-btn .tab-icon {
-  font-size: 15px;
-}
-
 .nav-tab-btn:hover {
-  color: var(--primary);
-  background: rgba(0, 174, 239, 0.08);
+  background: rgba(0, 174, 239, 0.15);
+  color: var(--primary-dark);
 }
 
+/* アクティブタブ: 下辺を開放して下のカードと完全に一体化！ */
 .nav-tab-btn.active {
-  color: #ffffff;
-  background: var(--primary);
-  box-shadow: var(--shadow-neon);
+  background: #ffffff;
+  border-color: var(--border-strong);
+  border-bottom: 2px solid #ffffff; /* 下辺を透過させて下の白背景と直結！ */
+  color: var(--primary-dark);
+  font-weight: 800;
+  box-shadow: 0 -3px 10px rgba(0, 174, 239, 0.08);
+}
+
+body.theme-tactical-dark .nav-tab-btn {
+  background: rgba(0, 174, 239, 0.1);
+  border-color: rgba(0, 174, 239, 0.3);
+}
+
+body.theme-tactical-dark .nav-tab-btn.active {
+  background: #141f2e;
+  border-color: var(--border-strong);
+  border-bottom: 2px solid #141f2e;
+  color: var(--cyan-bright);
 }
 
 .nav-tab-btn.tab-btn-settings {
-  flex: 0 0 46px;
-  padding: 9px 0;
-  font-size: 16px;
+  flex: 0 0 42px;
+  padding: 8px 0;
+  font-size: 15px;
 }
 
 /* ==========================================================================
-   3. メインビューポート & タブコンテンツ
+   3. メインビューポート & タブコンテンツ (フォルダの本体領域)
    ========================================================================== */
 .app-main-viewport {
-  display: flex;
-  flex-direction: column;
+  position: relative;
+  z-index: 1;
 }
 
 .tab-view-content {
   display: none;
   flex-direction: column;
   gap: 12px;
+  background: #ffffff;
+  border: 1.5px solid var(--border-strong);
+  border-radius: 0 10px 10px 10px; /* 左上をタブと結合 */
+  padding: 12px 14px;
+  box-shadow: var(--shadow-sm);
+}
+
+body.theme-tactical-dark .tab-view-content {
+  background: #141f2e;
+  border-color: var(--border-strong);
 }
 
 .tab-view-content.active {
   display: flex;
-  animation: fadeIn 0.25s ease-out;
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(4px); }
-  to { opacity: 1; transform: translateY(0); }
+  animation: fadeIn 0.2s ease-out;
 }
 
 /* 共通カードデザイン (水色シャーレ) */
 .cyan-card {
-  background: var(--bg-card);
+  background: rgba(244, 247, 249, 0.7);
   border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  padding: 14px 16px;
-  box-shadow: 0 4px 16px rgba(0, 174, 239, 0.04);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  box-shadow: 0 2px 8px rgba(0, 174, 239, 0.03);
   transition: var(--transition);
+}
+
+body.theme-tactical-dark .cyan-card {
+  background: rgba(18, 27, 40, 0.7);
 }
 
 .cyan-card:hover {
   border-color: var(--border-glow);
   box-shadow: var(--shadow-neon);
+}
+
+/* ==========================================================================
+   4. 排出された☆３生徒一覧 (添付2枚目準拠: 横3列・古い順・日付なし・省スペース)
+   ========================================================================== */
+.three-star-section-box {
+  width: 100%;
+}
+
+.three-star-grid-3cols {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+/* 生徒カード (添付2枚目忠実再現) */
+.three-star-item-card {
+  border-radius: 8px;
+  padding: 8px 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  position: relative;
+  background: #ffffff;
+  border: 1.5px solid rgba(0, 174, 239, 0.22);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.03);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+body.theme-tactical-dark .three-star-item-card {
+  background: #1a273a;
+}
+
+.three-star-item-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-sm);
+}
+
+/* 枠線の色分け (添付2枚目準拠) */
+/* ピックアップ: ゴールド枠 */
+.three-star-item-card.border-pickup {
+  border: 2px solid #f59e0b !important;
+  background: rgba(245, 158, 11, 0.06) !important;
+}
+
+/* 新規獲得: 赤枠 */
+.three-star-item-card.border-new {
+  border: 2px solid #ff3e6c !important;
+  background: rgba(255, 62, 108, 0.06) !important;
+}
+
+/* 50%枠すり抜け: 緑枠 */
+.three-star-item-card.border-fifty {
+  border: 2px solid #10b981 !important;
+  background: rgba(16, 185, 129, 0.06) !important;
+}
+
+/* 200連天井交換: 黒枠 */
+.three-star-item-card.border-exchange {
+  border: 2.5px solid #1f2937 !important;
+  background: rgba(31, 41, 55, 0.08) !important;
+}
+
+/* 通常すり抜け(被り): 薄青/グレー枠 */
+.three-star-item-card.border-regular {
+  border: 1.5px solid rgba(0, 174, 239, 0.28) !important;
+  background: rgba(255, 255, 255, 0.9) !important;
+}
+
+body.theme-tactical-dark .three-star-item-card.border-regular {
+  background: rgba(20, 31, 46, 0.9) !important;
+}
+
+/* アイコンラッパー */
+.ts-card-avatar-wrap {
+  position: relative;
+  width: 46px;
+  height: 46px;
+  margin-bottom: 5px;
+}
+
+.ts-card-avatar {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1.5px solid rgba(0, 174, 239, 0.3);
+  background: #f0f7fa;
+  display: block;
+}
+
+/* 2回目・3回目バッジ (添付2枚目忠実再現: アイコン右肩の黒バッジ) */
+.ts-card-count-badge {
+  position: absolute;
+  top: -2px;
+  right: -6px;
+  background: #1f2937;
+  color: #ffffff;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 4px;
+  border-radius: 8px;
+  border: 1px solid #ffffff;
+  white-space: nowrap;
+  line-height: 1.2;
+}
+
+/* 生徒名 */
+.ts-card-name {
+  font-size: 11.5px;
+  font-weight: 800;
+  color: var(--text-main);
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+/* 種別テキスト (添付2枚目準拠: ピックアップ, 新規獲得, すり抜け(被り), 交換) */
+.ts-card-type-text {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-muted);
+  line-height: 1.2;
+  margin-top: 2px;
+  white-space: nowrap;
+}
+
+.three-star-item-card.border-pickup .ts-card-type-text {
+  color: #b45309;
+}
+
+body.theme-tactical-dark .three-star-item-card.border-pickup .ts-card-type-text {
+  color: #fbbf24;
+}
+
+.three-star-item-card.border-new .ts-card-type-text {
+  color: #e11d48;
+}
+
+.three-star-item-card.border-fifty .ts-card-type-text {
+  color: #059669;
+}
+
+.three-star-item-card.border-exchange .ts-card-type-text {
+  color: #111827;
+}
+
+body.theme-tactical-dark .three-star-item-card.border-exchange .ts-card-type-text {
+  color: #e2e8f0;
 }
 
 /* ==========================================================================
@@ -1010,9 +1183,36 @@ body.theme-tactical-dark .schale-sheet-table tr.row-charge-100 td {
   width: 100%;
   display: flex;
   align-items: center;
+  gap: 5px;
+}
+
+/* 生徒名確定時に左側に表示されるサムネイルアイコン */
+.sheet-student-avatar-slot {
+  width: 24px;
+  height: 24px;
+  border-radius: 5px;
+  flex-shrink: 0;
+  overflow: hidden;
+  border: 1.5px solid var(--border-strong);
+  background: #e6f7fd;
+  display: none;
+  box-shadow: 0 1px 4px rgba(0, 174, 239, 0.15);
+}
+
+.sheet-student-avatar-slot.visible {
+  display: block;
+}
+
+.sheet-student-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
 
 .sheet-student-input {
+  flex: 1;
+  min-width: 0;
   width: 100%;
   padding: 6px 10px;
   font-size: 13px;
@@ -1184,14 +1384,14 @@ body.theme-tactical-dark .sheet-student-input.is-pickup {
 
 /* 生徒名サジェストポップアップ (前方一致・平仮名カタカナ) */
 .student-suggest-popup {
-  position: absolute;
-  z-index: 1000;
-  background: var(--bg-card-hover);
+  position: fixed;
+  z-index: 999999;
+  background: #ffffff;
   border: 1.5px solid var(--primary);
   border-radius: var(--radius-md);
-  box-shadow: 0 8px 24px rgba(0, 174, 239, 0.25);
-  width: 240px;
-  max-height: 260px;
+  box-shadow: 0 4px 20px rgba(0, 174, 239, 0.25), 0 2px 10px rgba(0, 0, 0, 0.12);
+  width: 210px;
+  max-height: 230px;
   overflow: hidden;
   display: flex;
   flex-direction: column;
