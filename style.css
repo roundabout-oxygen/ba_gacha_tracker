@@ -299,6 +299,11 @@ body {
   font-size: 11.5px;
   font-weight: 700;
   color: var(--primary);
+  transition: color 0.3s ease;
+}
+
+.ccharge-val-num.charge-danger {
+  color: #ff3e6c !important;
 }
 
 .ccharge-bar-track {
@@ -318,7 +323,12 @@ body.theme-tactical-dark .ccharge-bar-track {
   height: 100%;
   background: linear-gradient(90deg, var(--primary), var(--accent-blue));
   border-radius: 4px;
-  transition: width 0.3s ease;
+  transition: width 0.3s ease, background 0.3s ease;
+}
+
+.ccharge-bar-fill.charge-danger {
+  background: linear-gradient(90deg, #ff3e6c, #ff6b8b) !important;
+  box-shadow: 0 0 8px rgba(255, 62, 108, 0.45);
 }
 
 .ccharge-foot-txt {
@@ -438,10 +448,239 @@ body.theme-tactical-dark .tab-view-content {
   box-shadow: none;
 }
 
+.settings-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  padding: 0 4px;
+}
+
 .settings-panel-body {
   display: flex;
   flex-direction: column;
+  gap: 12px;
+}
+
+/* 設定グループカード (添付画像 赤枠・緑枠準拠) */
+.settings-group-card {
+  background: #ffffff;
+  border: 1.5px solid rgba(0, 174, 239, 0.35);
+  border-radius: 8px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
   gap: 10px;
+  box-shadow: 0 2px 6px rgba(0, 174, 239, 0.04);
+}
+
+body.theme-tactical-dark .settings-group-card {
+  background: #142030;
+  border-color: rgba(0, 174, 239, 0.4);
+}
+
+.settings-group-title {
+  font-size: 13px;
+  font-weight: 800;
+  color: #008ec4;
+  letter-spacing: 0.5px;
+  border-bottom: 1px dashed rgba(0, 174, 239, 0.25);
+  padding-bottom: 4px;
+}
+
+body.theme-tactical-dark .settings-group-title {
+  color: #38bdf8;
+}
+
+.settings-row-item {
+  width: 100%;
+}
+
+/* 1つのボタンを左右に分割した確率切替ボタン (左: 3%, 右: 6%) */
+.split-rate-toggle {
+  display: flex;
+  width: 100%;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1.5px solid #00aeef;
+  background: #f0f9fd;
+}
+
+.split-rate-btn {
+  flex: 1;
+  padding: 8px 0;
+  font-size: 13.5px;
+  font-weight: 800;
+  font-family: 'JetBrains Mono', 'Outfit', sans-serif;
+  border: none;
+  background: transparent;
+  color: #00aeef;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: center;
+}
+
+.split-rate-btn.active {
+  background: #00aeef;
+  color: #ffffff;
+  box-shadow: 0 1px 4px rgba(0, 174, 239, 0.3);
+}
+
+.split-rate-btn:not(.active):hover {
+  background: rgba(0, 174, 239, 0.12);
+}
+
+/* チャージ引継ぎ (1行まとめ: 開始時にチャージ [入力] チャージ) */
+.settings-inline-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.settings-inline-label {
+  white-space: nowrap;
+}
+
+.settings-charge-input {
+  width: 72px;
+  text-align: center;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 14px;
+  font-weight: 800;
+  padding: 5px 4px;
+}
+
+.settings-inline-unit {
+  white-space: nowrap;
+  color: var(--text-sub);
+  font-weight: 600;
+}
+
+/* ピックアップ生徒設定 (1行まとめ & dropup候補リスト) */
+.settings-pu-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.settings-pu-input-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.pu-input-wrap {
+  flex: 1;
+  position: relative;
+}
+
+/* 上側に表示されるサジェストドロップアップ */
+.student-suggest-dropup {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  right: 0;
+  margin-bottom: 6px;
+  max-height: 190px;
+  overflow-y: auto;
+  background: #ffffff;
+  border: 1.5px solid var(--border-glow);
+  border-radius: 6px;
+  box-shadow: 0 -4px 16px rgba(0, 174, 239, 0.18);
+  z-index: 1000;
+}
+
+body.theme-tactical-dark .student-suggest-dropup {
+  background: #152233;
+}
+
+.student-suggest-dropup .dropup-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  cursor: pointer;
+  border-bottom: 1px solid rgba(0, 174, 239, 0.08);
+  transition: background 0.15s ease;
+}
+
+.student-suggest-dropup .dropup-item:hover,
+.student-suggest-dropup .dropup-item.active {
+  background: #e6f7fd;
+}
+
+body.theme-tactical-dark .student-suggest-dropup .dropup-item:hover,
+body.theme-tactical-dark .student-suggest-dropup .dropup-item.active {
+  background: #1e334d;
+}
+
+.student-suggest-dropup .dropup-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid rgba(0, 174, 239, 0.3);
+  object-fit: cover;
+}
+
+.student-suggest-dropup .dropup-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+/* 仮登録ボタングループ */
+.settings-custom-tools-btns {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.settings-group-btn {
+  width: 100%;
+  text-align: center;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 700;
+  background: #f8fcfe;
+  border: 1.5px solid rgba(0, 174, 239, 0.4);
+  border-radius: 6px;
+  color: #008ec4;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.settings-group-btn:hover {
+  background: #e6f7fd;
+  border-color: #00aeef;
+}
+
+body.theme-tactical-dark .settings-group-btn {
+  background: #18283d;
+  color: #38bdf8;
+  border-color: rgba(0, 174, 239, 0.5);
+}
+
+/* 最下部アクション: 自動更新 & 全て初期化 (横並び1行) */
+.settings-bottom-actions-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 4px;
+}
+
+.btn-bottom-action {
+  flex: 1;
+  text-align: center;
+  padding: 9px 4px;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
 }
 
 .settings-actions-footer {
@@ -1132,7 +1371,15 @@ body.theme-tactical-dark .schale-sheet-table th {
   color: var(--primary);
 }
 
-.col-name {
+.col-charge.charge-danger {
+  color: #ff3e6c !important;
+}
+
+.schale-sheet-table th.col-name {
+  text-align: center !important;
+}
+
+td.col-name {
   text-align: left;
   min-width: 160px;
 }

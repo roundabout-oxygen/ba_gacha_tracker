@@ -1,10 +1,10 @@
 /**
  * ブルーアーカイブ リアルタイムガチャ集計 (BA Gacha Live Tracker)
- * Version: v1.0.11
+ * Version: v1.0.12
  * Core Application Logic & State Management
  */
 
-const APP_VERSION = 'v1.0.11';
+const APP_VERSION = 'v1.0.12';
 const REMOTE_STUDENT_ICONS_URL = 'https://raw.githubusercontent.com/roundabout-oxygen/ba_gacha_tabulation/main/data/student_icons.json';
 
 // 単発 (1連) モードかどうかのフラグ (false = 10連モード, true = 1連モード)
@@ -100,7 +100,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // URLパラメータの解釈 (テスト・自動検証用)
   const urlParams = new URLSearchParams(window.location.search);
-  if (urlParams.get('demo') === '1' && AppState.pulls.length === 0) {
+  if (urlParams.get('demo') === '1') {
     loadDemoGachaData();
   }
 
@@ -252,34 +252,18 @@ function applyTheme(themeName) {
 // ==========================================================================
 
 async function loadStudentDictionaries() {
-  let loaded = false;
-
-  // 1. GitHub (roundabout-oxygen/ba_gacha_tabulation) から自動フェッチ
+  // 1. ローカルの data/student_icons.json を即座に先行読み込み（即時サジェスト可能にする）
   try {
-    const res = await fetch(REMOTE_STUDENT_ICONS_URL, { cache: 'no-cache' });
-    if (res.ok) {
-      AppState.officialStudents = await res.json();
-      loaded = true;
-      console.log('Successfully fetched student icons from GitHub roundabout-oxygen/ba_gacha_tabulation.');
+    const localRes = await fetch('data/student_icons.json');
+    if (localRes.ok) {
+      AppState.officialStudents = await localRes.json();
+      console.log('Loaded student icons from local.');
     }
   } catch (err) {
-    console.warn('Could not fetch student icons from remote GitHub:', err);
+    console.warn('Could not load local student_icons.json fallback:', err);
   }
 
-  // 2. フォールバック: ローカルの data/student_icons.json
-  if (!loaded) {
-    try {
-      const localRes = await fetch('data/student_icons.json');
-      if (localRes.ok) {
-        AppState.officialStudents = await localRes.json();
-        console.log('Loaded student icons from local fallback.');
-      }
-    } catch (err) {
-      console.warn('Could not load local student_icons.json fallback:', err);
-    }
-  }
-
-  // 3. ローカルの仮登録データ (data/custom_students.json) があればマージ
+  // 2. ローカルの仮登録データ (data/custom_students.json) があればマージ
   try {
     const resCustom = await fetch('data/custom_students.json');
     if (resCustom.ok) {
@@ -290,6 +274,20 @@ async function loadStudentDictionaries() {
     }
   } catch (e) {
     // 省略可
+  }
+
+  // 3. バックグラウンドで GitHub (roundabout-oxygen/ba_gacha_tabulation) から最新差分を自動フェッチ
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 2000);
+    const res = await fetch(REMOTE_STUDENT_ICONS_URL, { cache: 'no-cache', signal: controller.signal });
+    clearTimeout(timeoutId);
+    if (res.ok) {
+      AppState.officialStudents = await res.json();
+      console.log('Updated student icons from GitHub.');
+    }
+  } catch (err) {
+    // オフラインまたはタイムアウト時はローカル辞書をそのまま継続利用
   }
 
   // 4. 重複自動クリーンアップ
@@ -419,17 +417,105 @@ function switchTab(tabId) {
 
 /**
  * 直前までのチャージ数を計算
- * ガチャ1回ごとに+1。ピックアップを引いた時点でリセットされ、次から1になる。
+ * ガチャ1回ごとに+1。ピックアップを引いた時点でリセットされ、次から1になる。天井200到達時もリセット。
  */
 function calculateCurrentCharge() {
   let charge = Number(AppState.config.initCharge) || 0;
   for (const pull of AppState.pulls) {
     charge += 1;
-    if (pull.isPick) {
+    if (pull.isPick || pull.charge === 200) {
       charge = 0; // 次の引きで1になる
     }
   }
   return charge;
+}
+
+/**
+ * 現在アクティブなチャージ分子（最新の10連の最終行、または最新引きのチャージ）を取得
+ */
+function getActiveDisplayCharge() {
+  if (AppState.currentSession && AppState.currentSession.rows && AppState.currentSession.rows.length > 0) {
+    const targetIdx = isSinglePullMode ? 0 : (AppState.currentSession.rows.length - 1);
+    const targetRow = AppState.currentSession.rows[targetIdx];
+    if (targetRow && targetRow.charge !== undefined) {
+      return targetRow.charge;
+    }
+  }
+  return calculateCurrentCharge();
+}
+
+/**
+ * 現在のシート内のチャージ数・50%天井行のハイライト・上部集計バーを即時再計算
+ * pickチェックボックスの変更時や生徒名入力時に即座に呼ばれる
+ */
+function recalculateCurrentSessionCharges() {
+  if (!AppState.currentSession.rows || AppState.currentSession.rows.length === 0) return;
+
+  // 開始直前のチャージ数を取得
+  let startCharge = 0;
+  const currentEditingId = AppState.currentSession.editingBatchId;
+  if (currentEditingId) {
+    const batches = getAllBatches();
+    const currentIdx = batches.indexOf(currentEditingId);
+    if (currentIdx > 0) {
+      const prevBatchId = batches[currentIdx - 1];
+      const prevPulls = AppState.pulls.filter(p => p.batchId === prevBatchId);
+      if (prevPulls.length > 0) {
+        startCharge = prevPulls[prevPulls.length - 1].charge;
+      }
+    } else {
+      startCharge = Number(AppState.config.initCharge) || 0;
+    }
+  } else {
+    if (AppState.pulls.length > 0) {
+      startCharge = AppState.pulls[AppState.pulls.length - 1].charge;
+    } else {
+      startCharge = Number(AppState.config.initCharge) || 0;
+    }
+  }
+
+  let runningCharge = startCharge;
+  const tbody = document.getElementById('gachaSheetTbody');
+  const trList = tbody ? tbody.querySelectorAll('tr') : [];
+
+  AppState.currentSession.rows.forEach((row, idx) => {
+    runningCharge += 1;
+    row.charge = runningCharge;
+    row.isGuaranteed50 = (runningCharge === 100);
+    row.isGuaranteed100 = (runningCharge === 200);
+
+    // DOM更新
+    if (trList[idx]) {
+      const tr = trList[idx];
+      const tdCharge = tr.querySelector('.col-charge');
+      if (tdCharge) {
+        let label = runningCharge;
+        if (runningCharge === 100) label += ' (50%)';
+        else if (runningCharge === 200) label += ' (天井)';
+        tdCharge.textContent = label;
+
+        if (runningCharge > 100) {
+          tdCharge.classList.add('charge-danger');
+        } else {
+          tdCharge.classList.remove('charge-danger');
+        }
+      }
+
+      if (runningCharge === 100 || runningCharge === 200) {
+        tr.classList.add('row-charge-100');
+      } else {
+        tr.classList.remove('row-charge-100');
+      }
+    }
+
+    // pickに☑が入っていれば、次の行のガチャはチャージ1から開始！
+    if (row.isPick || runningCharge === 200) {
+      runningCharge = 0;
+    }
+  });
+
+  // 上部の集計データ（☆3確率、PU確率、チャージ数等）も即時反映！
+  updateAllStats();
 }
 
 // ==========================================================================
@@ -480,10 +566,15 @@ function setupInputSheet() {
       isGuaranteed50: isGuaranteed50,
       isGuaranteed100: isGuaranteed100
     });
+
+    if (chargeVal === 200) {
+      runningCharge = 0;
+    }
   }
 
   AppState.currentSession.rows = rows;
   renderInputSheetTable();
+  updateAllStats();
 }
 
 /**
@@ -495,7 +586,7 @@ function recalculatePullsIndexAndCharge() {
     p.totalPullIndex = idx + 1;
     runningCharge += 1;
     p.charge = runningCharge;
-    if (p.isPick) {
+    if (p.isPick || runningCharge === 200) {
       runningCharge = 0;
     }
   });
@@ -548,18 +639,29 @@ function loadBatchById(targetBatchId) {
 }
 
 /**
- * 「◁ 前の10連へ」: 前の引きをシートに呼び戻して再編集可能にする
+ * 「◁ 前の10連へ」: 現在の入力を保存した上で、前の引きをシートに呼び戻して再編集可能にする
  */
 function loadPreviousBatch() {
+  const currentEditingId = AppState.currentSession.editingBatchId;
+  const rows = AppState.currentSession.rows || [];
+  const hasInput = rows.some(r => (r.studentName && r.studentName.trim()) || r.isPick);
+
+  // 入力がある場合、または既存バッチ編集中なら確実に保存する！
+  if (currentEditingId || hasInput) {
+    commitCurrentSheet();
+  }
+
   const batches = getAllBatches();
   if (batches.length === 0) return;
 
   let targetBatchId = null;
-  const currentEditingId = AppState.currentSession.editingBatchId;
-
   if (!currentEditingId) {
-    // 現在新規引き入力中の場合: 最後のバッチへ
-    targetBatchId = batches[batches.length - 1];
+    // 新規入力から保存された場合、末尾が今保存したバッチなので、その前へ
+    if (hasInput && batches.length >= 2) {
+      targetBatchId = batches[batches.length - 2];
+    } else {
+      targetBatchId = batches[batches.length - 1];
+    }
   } else {
     // すでに過去のバッチを編集中: さらに1つ前のバッチへ
     const currentIdx = batches.indexOf(currentEditingId);
@@ -820,6 +922,7 @@ function renderInputSheetTable() {
       } else {
         inputName.classList.remove('is-pickup');
       }
+      recalculateCurrentSessionCharges();
     });
     const boxPick = document.createElement('span');
     boxPick.className = 'custom-chk-box';
@@ -840,6 +943,7 @@ function renderInputSheetTable() {
     chkNew.dataset.rowIndex = idx;
     chkNew.addEventListener('change', (e) => {
       row.isNew = e.target.checked;
+      updateAllStats();
     });
     const boxNew = document.createElement('span');
     boxNew.className = 'custom-chk-box';
@@ -893,6 +997,9 @@ function onStudentInputChange(rowIndex, value) {
     const chkNew = document.querySelectorAll(`.col-chk input[data-row-index="${rowIndex}"]`)[1];
     if (chkNew) chkNew.checked = false;
   }
+
+  // チャージ数の再計算および集計即時反映！
+  recalculateCurrentSessionCharges();
 
   // サジェストリスト更新
   updateStudentGuidePopup(inputEl, value, rowIndex);
@@ -1129,42 +1236,108 @@ function commitCurrentSheet() {
 // 統計計算 & 画面更新
 // ==========================================================================
 
+/**
+ * シート入力中の内容も加味したリアルタイム集計用 pulls リストを取得
+ */
+function getCombinedLivePulls() {
+  if (AppState.currentSession && AppState.currentSession.rows && AppState.currentSession.rows.length > 0) {
+    const editingBatchId = AppState.currentSession.editingBatchId;
+    const rows = AppState.currentSession.rows;
+    const targetRows = isSinglePullMode ? [rows[0]] : rows;
+
+    if (editingBatchId) {
+      const list = [];
+      AppState.pulls.forEach(p => {
+        if (p.batchId !== editingBatchId) {
+          list.push(p);
+        }
+      });
+      targetRows.forEach(r => {
+        const isThreeStar = Boolean(r.studentName && r.studentName.trim());
+        list.push({
+          totalPullIndex: r.total,
+          charge: r.charge,
+          studentName: r.studentName ? normalizeStudentName(r.studentName) : '',
+          isThreeStar: isThreeStar,
+          isPick: Boolean(r.isPick),
+          isNew: Boolean(r.isNew),
+          isGuaranteed50: Boolean(r.isGuaranteed50),
+          isGuaranteed100: Boolean(r.isGuaranteed100)
+        });
+      });
+      return list;
+    } else {
+      const hasAnyInput = targetRows.some(r => (r.studentName && r.studentName.trim()) || r.isPick);
+      if (hasAnyInput) {
+        const list = [...AppState.pulls];
+        targetRows.forEach(r => {
+          const isThreeStar = Boolean(r.studentName && r.studentName.trim());
+          list.push({
+            totalPullIndex: r.total,
+            charge: r.charge,
+            studentName: r.studentName ? normalizeStudentName(r.studentName) : '',
+            isThreeStar: isThreeStar,
+            isPick: Boolean(r.isPick),
+            isNew: Boolean(r.isNew),
+            isGuaranteed50: Boolean(r.isGuaranteed50),
+            isGuaranteed100: Boolean(r.isGuaranteed100)
+          });
+        });
+        return list;
+      }
+    }
+  }
+  return AppState.pulls;
+}
+
 function updateAllStats() {
-  const pulls = AppState.pulls;
+  const pulls = getCombinedLivePulls();
   const totalPulls = pulls.length;
   const pyroxene = totalPulls * 120;
 
-  // ☆３集計
-  const threeStarPulls = pulls.filter(p => p.isThreeStar);
-  const threeStarCount = threeStarPulls.length;
-  const threeStarRate = totalPulls > 0 ? (threeStarCount / totalPulls) * 100 : 0;
+  // ☆３集計 (チャージ100連目および200連目は☆3確率100%枠のため、通常確率の集計から除外)
+  const guaranteedPulls = pulls.filter(p => Number(p.charge) === 100 || Number(p.charge) === 200);
+  const guaranteedThreeStarPulls = guaranteedPulls.filter(p => p.isThreeStar);
 
+  const effectiveTotalPulls = totalPulls - guaranteedPulls.length;
+  const allThreeStarPulls = pulls.filter(p => p.isThreeStar);
+  const effectiveThreeStarCount = allThreeStarPulls.length - guaranteedThreeStarPulls.length;
+
+  const threeStarRate = effectiveTotalPulls > 0 ? (effectiveThreeStarCount / effectiveTotalPulls) * 100 : 0;
   const expectedRate = AppState.config.rate || 0.03;
-  const expectedCount = totalPulls * expectedRate;
-  const diffCount = threeStarCount - expectedCount;
+  const expectedCount = effectiveTotalPulls * expectedRate;
+  const diffCount = effectiveThreeStarCount - expectedCount;
 
-  // ピックアップ集計
+  // ピックアップ集計 (PU確率は引いた総回転数に対する割合)
   const pickupPulls = pulls.filter(p => p.isPick);
   const pickupCount = pickupPulls.length;
   const pickupRate = totalPulls > 0 ? (pickupCount / totalPulls) * 100 : 0;
   const expectedPickup = totalPulls * 0.007;
 
-  // 50%勝率集計 (charge === 100 のときの勝敗)
-  const fiftyPulls = pulls.filter(p => p.charge === 100);
+  // 50%勝率集計 (charge === 100 のときの勝敗: pickなら勝ち、すり抜けなら負け)
+  const fiftyPulls = pulls.filter(p => Number(p.charge) === 100);
   const fiftyWins = fiftyPulls.filter(p => p.isPick).length;
   const fiftyLosses = fiftyPulls.length - fiftyWins;
   const fiftyWinRate = fiftyPulls.length > 0 ? (fiftyWins / fiftyPulls.length) * 100 : 0;
 
-  // 現在チャージ
-  const currentCharge = calculateCurrentCharge();
-  const chargePercent = Math.min(100, (currentCharge % 100));
-  const remainingTo100 = 100 - (currentCharge % 100);
+  // 現在チャージ判定（最新10連の最終行の分子が100を超えていたら分母200＆赤色表示）
+  const activeCharge = getActiveDisplayCharge();
+  let chargeDenominator = 100;
+  let isDanger200 = false;
+
+  if (activeCharge > 100) {
+    chargeDenominator = 200;
+    isDanger200 = true;
+  }
+
+  const remainingToTarget = Math.max(0, chargeDenominator - activeCharge);
+  const chargePercent = Math.min(100, (activeCharge / chargeDenominator) * 100);
 
   // 1. トップ簡易集計バー反映
   setText('liveStatTotalPulls', totalPulls);
   setText('liveStatPyroxene', pyroxene.toLocaleString());
   setText('liveStatThreeStarRate', threeStarRate.toFixed(2));
-  setText('liveStatThreeStarCount', threeStarCount);
+  setText('liveStatThreeStarCount', effectiveThreeStarCount);
   setText('liveStatThreeStarDiff', (diffCount >= 0 ? '+' : '') + diffCount.toFixed(1));
   setText('liveStatPickupRate', pickupRate.toFixed(2));
   setText('liveStatPickupCount', pickupCount);
@@ -1175,11 +1348,29 @@ function updateAllStats() {
   setText('liveStatFiftyTotal', fiftyPulls.length);
 
   const chargeTextEl = document.getElementById('liveStatChargeText');
-  if (chargeTextEl) chargeTextEl.textContent = `${currentCharge} / 100`;
+  if (chargeTextEl) {
+    chargeTextEl.textContent = `${activeCharge} / ${chargeDenominator}`;
+    if (isDanger200) {
+      chargeTextEl.classList.add('charge-danger');
+    } else {
+      chargeTextEl.classList.remove('charge-danger');
+    }
+  }
+
   const chargeFillEl = document.getElementById('liveChargeProgressFill');
-  if (chargeFillEl) chargeFillEl.style.width = `${chargePercent}%`;
+  if (chargeFillEl) {
+    chargeFillEl.style.width = `${chargePercent}%`;
+    if (isDanger200) {
+      chargeFillEl.classList.add('charge-danger');
+    } else {
+      chargeFillEl.classList.remove('charge-danger');
+    }
+  }
+
   const chargeSubEl = document.getElementById('liveChargeSub');
-  if (chargeSubEl) chargeSubEl.textContent = `あと ${remainingTo100}連`;
+  if (chargeSubEl) {
+    chargeSubEl.textContent = `あと ${remainingToTarget}連`;
+  }
 
   // 2. ダッシュボードカード反映
   setText('dashTotalPulls', totalPulls);
@@ -1189,7 +1380,7 @@ function updateAllStats() {
   setText('dashSinglePullsCount', pulls.filter(p => p.pullType === '1').length);
 
   setText('dashThreeStarRate', threeStarRate.toFixed(2));
-  setText('dashThreeStarCount', threeStarCount);
+  setText('dashThreeStarCount', effectiveThreeStarCount);
   setText('dashThreeStarDiffVal', (diffCount >= 0 ? '+' : '') + diffCount.toFixed(1));
 
   const luckEvaluation = diffCount > 1.5 ? '大勝利！' : diffCount < -1.5 ? '下振れ中' : '期待値通り';
@@ -1225,8 +1416,8 @@ function updateAllStats() {
   const ceilingRate = totalPulls >= 200 ? ((ceilingCount * 200 / totalPulls) * 100).toFixed(1) : '0.0';
   setText('dashCeilingRate', ceilingRate);
 
-  setText('dashCurrentChargeVal', `${currentCharge} `);
-  setText('dashChargeRemainingText', `あと ${remainingTo100}連`);
+  setText('dashCurrentChargeVal', `${activeCharge} `);
+  setText('dashChargeRemainingText', `あと ${remainingToTarget}連`);
 
   // バッジ更新
   const rateBadge = document.getElementById('dashThreeStarBadge');
@@ -1292,8 +1483,8 @@ const convergenceRelativeMatrixPlugin = {
         if (baseX < left || baseX > right) return;
 
         const isPick = Boolean(pull.isPick);
-        // 相対誤差0%の上方にピックアップ(Y=35%)、最下段にピックアップ以外(Y=-100%)
-        const targetYVal = isPick ? 35 : -100;
+        // ピックアップ生徒は100%の少し下あたりの高さ（Y=85%）、最下段にピックアップ以外（Y=-100%）
+        const targetYVal = isPick ? 85 : -100;
         const centerY = chart.scales.y.getPixelForValue(targetYVal);
 
         // 重なり検出とカスケードずらし (ba_gacha_tabulation再現)
@@ -1392,14 +1583,21 @@ function renderConvergenceChart() {
   actualRatesMap[0] = 0;
 
   let threeCount = 0;
+  let normalPullsCount = 0;
   pulls.forEach((p, idx) => {
-    if (p.isThreeStar) threeCount++;
+    const isGuaranteed = (Number(p.charge) === 100 || Number(p.charge) === 200);
+    if (!isGuaranteed) {
+      normalPullsCount++;
+      if (p.isThreeStar) threeCount++;
+    }
     const currentN = idx + 1;
     if (currentN % 10 === 0 || currentN === totalPulls || p.isThreeStar) {
-      const actRate = (threeCount / currentN);
-      const dev = ((actRate - targetRate) / targetRate) * 100;
-      points.push({ x: currentN, y: Number(dev.toFixed(2)) });
-      actualRatesMap[currentN] = Number((actRate * 100).toFixed(2));
+      if (normalPullsCount > 0) {
+        const actRate = (threeCount / normalPullsCount);
+        const dev = ((actRate - targetRate) / targetRate) * 100;
+        points.push({ x: currentN, y: Number(dev.toFixed(2)) });
+        actualRatesMap[currentN] = Number((actRate * 100).toFixed(2));
+      }
     }
   });
 
@@ -1419,11 +1617,11 @@ function renderConvergenceChart() {
     { x: maxPulls, y: 0 }
   ];
 
-  // Y軸の最大値計算（きれいな50刻み丸め）
+  // Y軸の最大値計算（ピックアップが85%に配置されるため、最低でも120%を確保）
   const deviations = uniquePoints.map(p => p.y);
   const maxDev = deviations.length > 0 ? Math.max(...deviations) : 0;
-  const absMax = Math.max(60, Math.ceil(maxDev * 1.15));
-  const yMaxRounded = Math.ceil(absMax / 50) * 50;
+  const absMax = Math.max(100, Math.ceil(maxDev * 1.15));
+  const yMaxRounded = Math.max(120, Math.ceil(absMax / 50) * 50);
 
   if (AppState.chartInstance) {
     AppState.chartInstance.destroy();
@@ -1509,17 +1707,11 @@ function renderConvergenceChart() {
           min: -120,
           max: yMaxRounded,
           ticks: {
-            stepSize: 50,
-            color: textColor,
-            font: { size: 10 },
-            callback: (val) => (val % 50 === 0 ? `${val}%` : '')
+            display: false
           },
           grid: { color: gridColor },
           title: {
-            display: true,
-            text: '理論値からの相対誤差 (%)',
-            color: textColor,
-            font: { size: 10 }
+            display: false
           }
         }
       }
@@ -1582,11 +1774,11 @@ function renderDirectoryGrid() {
     } else if (pull.isGuaranteed50) {
       typeText = 'すり抜け(50%)';
       borderClass = 'border-fifty';
-    } else if (pull.isNew || currentCount === 1) {
+    } else if (pull.isNew) {
       typeText = '新規獲得';
       borderClass = 'border-new';
     } else {
-      typeText = 'すり抜け(被り)';
+      typeText = currentCount > 1 ? 'すり抜け(被り)' : 'すり抜け';
       borderClass = 'border-regular';
     }
 
@@ -1690,10 +1882,18 @@ function renderHistoryTable() {
 // ==========================================================================
 
 function syncSettingsTabInputs() {
-  const rateRadio = AppState.config.rate === 0.06
-    ? document.getElementById('settingsRate6')
-    : document.getElementById('settingsRate3');
-  if (rateRadio) rateRadio.checked = true;
+  const isFest = AppState.config.rate === 0.06;
+  const btn3 = document.getElementById('btnRate3');
+  const btn6 = document.getElementById('btnRate6');
+  if (btn3 && btn6) {
+    if (isFest) {
+      btn6.classList.add('active');
+      btn3.classList.remove('active');
+    } else {
+      btn3.classList.add('active');
+      btn6.classList.remove('active');
+    }
+  }
 
   const initChargeInput = document.getElementById('settingsInitChargeInput');
   if (initChargeInput) initChargeInput.value = AppState.config.initCharge || 0;
@@ -1707,9 +1907,9 @@ function cancelSettingsFromTab() {
 }
 
 function saveSettingsFromTab() {
-  // 1. 確率
-  const rate6 = document.getElementById('settingsRate6');
-  AppState.config.rate = (rate6 && rate6.checked) ? 0.06 : 0.03;
+  // 1. 確率 (左右分割ボタンの active 状態で判定)
+  const btn6 = document.getElementById('btnRate6');
+  AppState.config.rate = (btn6 && btn6.classList.contains('active')) ? 0.06 : 0.03;
 
   // 2. チャージ引継ぎ
   const chargeInput = document.getElementById('settingsInitChargeInput');
@@ -1758,6 +1958,64 @@ function addPickupStudent(name) {
   }
   const input = document.getElementById('settingsPickupInput');
   if (input) input.value = '';
+  const dropdown = document.getElementById('settingsSuggestDropdown');
+  if (dropdown) dropdown.style.display = 'none';
+}
+
+function initSettingsPickupSuggest() {
+  const inputEl = document.getElementById('settingsPickupInput');
+  const dropdownEl = document.getElementById('settingsSuggestDropdown');
+  if (!inputEl || !dropdownEl) return;
+
+  inputEl.addEventListener('input', () => {
+    const val = inputEl.value.trim();
+    if (!val) {
+      dropdownEl.style.display = 'none';
+      dropdownEl.innerHTML = '';
+      return;
+    }
+
+    const matches = searchStudents(val).slice(0, 10);
+    if (matches.length === 0) {
+      dropdownEl.style.display = 'none';
+      dropdownEl.innerHTML = '';
+      return;
+    }
+
+    dropdownEl.innerHTML = '';
+    matches.forEach(name => {
+      const item = document.createElement('div');
+      item.className = 'dropup-item';
+
+      const iconUrl = getStudentIconUrl(name);
+      const img = document.createElement('img');
+      img.className = 'dropup-avatar';
+      img.src = iconUrl || 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" fill="%2300aeef"><rect width="100%" height="100%" fill="%23e6f7fd"/><text x="50%" y="58%" font-size="10" font-family="sans-serif" font-weight="bold" text-anchor="middle" fill="%2300aeef">★3</text></svg>';
+
+      const nameSpan = document.createElement('span');
+      nameSpan.className = 'dropup-name';
+      nameSpan.textContent = name;
+
+      item.appendChild(img);
+      item.appendChild(nameSpan);
+
+      item.addEventListener('click', () => {
+        addPickupStudent(name);
+        dropdownEl.style.display = 'none';
+        dropdownEl.innerHTML = '';
+      });
+
+      dropdownEl.appendChild(item);
+    });
+
+    dropdownEl.style.display = 'block';
+  });
+
+  document.addEventListener('click', (e) => {
+    if (!dropdownEl.contains(e.target) && e.target !== inputEl) {
+      dropdownEl.style.display = 'none';
+    }
+  });
 }
 
 // ==========================================================================
@@ -1837,7 +2095,21 @@ function initEventListeners() {
   if (btnCancel) btnCancel.addEventListener('click', cancelSettingsFromTab);
   if (btnSave) btnSave.addEventListener('click', saveSettingsFromTab);
 
-  // ピックアップ追加
+  // 左右分割確率ボタン (3% / 6%)
+  const btnRate3 = document.getElementById('btnRate3');
+  const btnRate6 = document.getElementById('btnRate6');
+  if (btnRate3 && btnRate6) {
+    btnRate3.addEventListener('click', () => {
+      btnRate3.classList.add('active');
+      btnRate6.classList.remove('active');
+    });
+    btnRate6.addEventListener('click', () => {
+      btnRate6.classList.add('active');
+      btnRate3.classList.remove('active');
+    });
+  }
+
+  // ピックアップ追加 & サジェスト初期化
   const btnAddPu = document.getElementById('btnSettingsAddPickup');
   const inputPu = document.getElementById('settingsPickupInput');
   if (btnAddPu && inputPu) {
@@ -1849,8 +2121,9 @@ function initEventListeners() {
       }
     });
   }
+  initSettingsPickupSuggest();
 
-  // テーマ切り替え
+  // テーマ切り替え (存在する場合のみ)
   const btnThemeCyan = document.getElementById('btnThemeCyan');
   const btnThemeDark = document.getElementById('btnThemeDark');
   if (btnThemeCyan) {
@@ -1864,15 +2137,39 @@ function initEventListeners() {
   const btnOpenCustom = document.getElementById('btnOpenCustomModalFromSettings');
   if (btnOpenCustom) {
     btnOpenCustom.addEventListener('click', () => {
-      document.getElementById('modalCustomStudent').showModal();
+      const modal = document.getElementById('modalCustomStudent');
+      if (modal && typeof modal.showModal === 'function') modal.showModal();
     });
   }
   const btnCloseCustom = document.getElementById('btnCloseCustomModal');
   if (btnCloseCustom) {
     btnCloseCustom.addEventListener('click', () => {
-      document.getElementById('modalCustomStudent').close();
+      const modal = document.getElementById('modalCustomStudent');
+      if (modal && typeof modal.close === 'function') modal.close();
     });
   }
+
+  // 設定から仮登録エディタ起動
+  const btnOpenEditor = document.getElementById('btnOpenCustomEditorFromSettings');
+  if (btnOpenEditor) {
+    btnOpenEditor.addEventListener('click', () => {
+      const modal = document.getElementById('modalCustomEditor');
+      if (modal && typeof modal.showModal === 'function') {
+        modal.showModal();
+        renderCustomStudentsTableIfOpen();
+      }
+    });
+  }
+  const btnCloseEditorModal = document.getElementById('btnCloseEditorModal');
+  const btnCloseEditor = document.getElementById('btnCloseEditor');
+  [btnCloseEditorModal, btnCloseEditor].forEach(btn => {
+    if (btn) {
+      btn.addEventListener('click', () => {
+        const modal = document.getElementById('modalCustomEditor');
+        if (modal && typeof modal.close === 'function') modal.close();
+      });
+    }
+  });
 
   // 生徒図鑑自動同期ボタン
   const btnSync = document.getElementById('btnSyncWikiDirect');
@@ -1885,12 +2182,30 @@ function initEventListeners() {
     });
   }
 
-  // データ初期化
+  // データ初期化（全て初期化）: GitHubアップ済みデータ保持 ＆ チャージ0リセット
   const btnReset = document.getElementById('btnResetAllData');
   if (btnReset) {
-    btnReset.addEventListener('click', () => {
-      if (confirm('ガチャ履歴を全て初期化しますか？（この操作は取り消せません）')) {
+    btnReset.addEventListener('click', async () => {
+      if (confirm('ガチャ履歴を全て初期化しますか？\n（チャージも0にリセットされます）')) {
         AppState.pulls = [];
+        AppState.config.initCharge = 0;
+        const initChargeInput = document.getElementById('settingsInitChargeInput');
+        if (initChargeInput) initChargeInput.value = 0;
+
+        // GitHubにアップロード済みの仮登録データ(data/custom_students.json)を保持/再読み込み
+        try {
+          const resCustom = await fetch('data/custom_students.json');
+          if (resCustom.ok) {
+            const remoteCustom = await resCustom.json();
+            if (remoteCustom && remoteCustom.students) {
+              AppState.customStudents = Object.assign({}, remoteCustom.students);
+            }
+          }
+        } catch (e) {
+          console.warn('Could not reload remote custom students on reset:', e);
+        }
+
+        recalculatePullsIndexAndCharge();
         persistState();
         updateAllStats();
         renderHistoryTable();
@@ -2230,4 +2545,18 @@ function saveCustomStudent() {
   persistState();
   alert(`生徒「${name}」のアイコンを仮登録しました！ガチャ入力で利用可能です。`);
   document.getElementById('modalCustomStudent').close();
+}
+
+// グローバルAPI公開 (デバッグ・外部連携・自動検証用)
+if (typeof window !== 'undefined') {
+  window.AppState = AppState;
+  window.switchTab = switchTab;
+  window.loadDemoGachaData = loadDemoGachaData;
+  window.setupInputSheet = setupInputSheet;
+  window.updateAllStats = updateAllStats;
+  window.renderDirectoryGrid = renderDirectoryGrid;
+  window.renderConvergenceChart = renderConvergenceChart;
+  window.recalculateCurrentSessionCharges = recalculateCurrentSessionCharges;
+  window.loadPreviousBatch = loadPreviousBatch;
+  window.commitCurrentSheet = commitCurrentSheet;
 }

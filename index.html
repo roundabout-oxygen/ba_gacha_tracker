@@ -25,8 +25,7 @@
         <div class="brand-group">
           <div class="brand-logo-icon">G</div>
           <div class="brand-titles">
-            <h1 class="brand-name">シャーレ ガチャ集計</h1>
-            <span class="version-badge" id="appVersionBadge">v1.0.11</span>
+            <h1 class="brand-name">ブルアカガチャ集計</h1>
           </div>
         </div>
         <div class="header-right-tools">
@@ -234,76 +233,66 @@
       <!-- ======================================================================= -->
       <section class="tab-view-content" id="tabSettings">
         <div class="cyan-card settings-panel-card">
+          <!-- 設定ヘッダー (タイトル & バージョン表記) -->
+          <div class="settings-panel-header">
+            <span class="card-head-title">⚙️ 設定</span>
+            <span class="version-badge" id="appVersionBadge">v1.0.12</span>
+          </div>
+
           <div class="settings-panel-body">
-            <!-- 確率設定 -->
-            <div class="form-group-block">
-              <label class="block-label">ガチャ枠の確率:</label>
-              <div class="segmented-radio-group">
-                <label class="radio-pill">
-                  <input type="radio" name="settingsRateRadio" value="0.03" id="settingsRate3">
-                  <span class="pill-btn">通常募集 (☆3: 3%)</span>
-                </label>
-                <label class="radio-pill">
-                  <input type="radio" name="settingsRateRadio" value="0.06" id="settingsRate6">
-                  <span class="pill-btn pill-fest">フェス募集 (☆3: 6%)</span>
-                </label>
+            <!-- 1. 初期設定グループカード (添付画像 赤枠) -->
+            <div class="settings-group-card">
+              <div class="settings-group-title">初期設定</div>
+
+              <!-- ガチャ枠の確率: 左右分割ボタン (左: 3%, 右: 6%) -->
+              <div class="settings-row-item">
+                <div class="split-rate-toggle" id="settingsRateToggle">
+                  <button type="button" class="split-rate-btn active" id="btnRate3" data-rate="0.03">3%</button>
+                  <button type="button" class="split-rate-btn" id="btnRate6" data-rate="0.06">6%</button>
+                </div>
+              </div>
+
+              <!-- チャージ引継ぎ設定: 1行 (開始時にチャージ [入力] チャージ) -->
+              <div class="settings-row-item settings-inline-row">
+                <span class="settings-inline-label">開始時にチャージ</span>
+                <input type="number" id="settingsInitChargeInput" class="styled-form-input settings-charge-input" min="0" max="199" value="0">
+                <span class="settings-inline-unit">チャージ</span>
+              </div>
+
+              <!-- ピックアップ生徒設定: 1行 (候補は上側に出る) -->
+              <div class="settings-row-item settings-pu-block">
+                <div class="pickup-tags-container" id="settingsPickupTags"></div>
+                <div class="settings-pu-input-row">
+                  <div class="pu-input-wrap">
+                    <input type="text" id="settingsPickupInput" class="styled-form-input" placeholder="生徒名を入力..." autocomplete="off">
+                    <!-- 上側に出る候補ポップアップ (dropup) -->
+                    <div id="settingsSuggestDropdown" class="student-suggest-dropup" style="display: none;"></div>
+                  </div>
+                  <button type="button" id="btnSettingsAddPickup" class="btn-cyan-sm">追加</button>
+                </div>
               </div>
             </div>
 
-            <!-- チャージ引継ぎ設定 -->
-            <div class="form-group-block">
-              <label class="block-label" for="settingsInitChargeInput">ガチャのチャージ引継ぎ数 (0〜199):</label>
-              <div class="input-unit-wrapper">
-                <input type="number" id="settingsInitChargeInput" class="styled-form-input" min="0" max="199" value="0">
-                <span class="unit-tag">連分チャージ済</span>
-              </div>
-            </div>
-
-            <!-- ピックアップ生徒設定 -->
-            <div class="form-group-block">
-              <label class="block-label">ピックアップ生徒設定:</label>
-              <div class="pickup-tags-container" id="settingsPickupTags"></div>
-              <div class="add-pickup-row">
-                <input type="text" id="settingsPickupInput" class="styled-form-input" placeholder="生徒名を入力..." autocomplete="off">
-                <button type="button" id="btnSettingsAddPickup" class="btn-cyan-sm">追加</button>
-              </div>
-              <div id="settingsSuggestDropdown" class="student-suggest-dropdown"></div>
-            </div>
-
-            <!-- テーマ切り替え (水色シャーレ ⇔ タクティカルダーク) -->
-            <div class="form-group-block">
-              <label class="block-label">カラーテーマ:</label>
-              <div class="theme-switch-row">
-                <button type="button" id="btnThemeCyan" class="btn-cyan-outline btn-theme-choice active">
-                  💧 水色シャーレ (標準)
-                </button>
-                <button type="button" id="btnThemeDark" class="btn-cyan-outline btn-theme-choice">
-                  🌌 タクティカルダーク
-                </button>
-              </div>
-            </div>
-
-            <!-- 新規生徒アイコン仮登録 & エディタ起動 -->
-            <div class="form-group-block custom-tools-block">
-              <label class="block-label">新規生徒アイコン仮登録機能:</label>
-              <div class="custom-tools-btns">
-                <button type="button" id="btnOpenCustomModalFromSettings" class="btn-cyan-sm">
+            <!-- 2. 仮登録グループカード (添付画像 緑枠) -->
+            <div class="settings-group-card">
+              <div class="settings-group-title">仮登録</div>
+              <div class="settings-custom-tools-btns">
+                <button type="button" id="btnOpenCustomModalFromSettings" class="btn-cyan-outline settings-group-btn">
                   ➕ 新規生徒アイコン仮登録
                 </button>
-                <button type="button" id="btnOpenCustomEditorFromSettings" class="btn-cyan-sm">
+                <button type="button" id="btnOpenCustomEditorFromSettings" class="btn-cyan-outline settings-group-btn">
                   📝 仮登録エディタ & 共有管理
-                </button>
-                <button type="button" id="btnSyncWikiDirect" class="btn-cyan-sm" title="ba_gacha_tabulationから最新生徒アイコンを自動同期">
-                  🔄 生徒図鑑データを自動更新
                 </button>
               </div>
             </div>
 
-            <!-- 危険ゾーン: 全データ初期化 -->
-            <div class="form-group-block danger-block">
-              <label class="block-label">データリセット:</label>
-              <button type="button" id="btnResetAllData" class="btn-danger-outline-sm">
-                ⚠️ ガチャ履歴を全て初期化
+            <!-- 3. 最下部アクション: 生徒図鑑データを自動更新 & 全て初期化 (1行にまとめる) -->
+            <div class="settings-bottom-actions-row">
+              <button type="button" id="btnSyncWikiDirect" class="btn-cyan-outline-sm btn-bottom-action" title="ba_gacha_tabulationから最新生徒アイコンを自動同期">
+                🔄 生徒図鑑データを自動更新
+              </button>
+              <button type="button" id="btnResetAllData" class="btn-danger-outline-sm btn-bottom-action">
+                ⚠️ 全て初期化
               </button>
             </div>
           </div>
