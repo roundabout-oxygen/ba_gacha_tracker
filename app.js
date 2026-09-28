@@ -1,10 +1,10 @@
 /**
  * ブルーアーカイブ リアルタイムガチャ集計 (BA Gacha Live Tracker)
- * Version: v1.0.22
+ * Version: v1.0.23
  * Core Application Logic & State Management
  */
 
-const APP_VERSION = 'v1.0.22';
+const APP_VERSION = 'v1.0.23';
 const REMOTE_STUDENT_ICONS_URL = 'https://raw.githubusercontent.com/roundabout-oxygen/ba_gacha_tabulation/main/data/student_icons.json';
 
 // 単発 (1連) モードかどうかのフラグ (false = 10連モード, true = 1連モード)
@@ -98,9 +98,19 @@ document.addEventListener('DOMContentLoaded', () => {
   updateAllStats();
   renderConvergenceChart();
 
-  // URLパラメータの解釈 (テスト・自動検証用)
+  // URLパラメータの解釈 (テスト・自動検証用 & 配信モード判定)
   const urlParams = new URLSearchParams(window.location.search);
-  if (urlParams.get('demo') === '1') {
+  const isOverlayMode = urlParams.get('mode') === 'overlay' || urlParams.get('mode') === 'stream' || window.location.hash === '#overlay';
+  if (isOverlayMode) {
+    document.body.classList.add('stream-overlay-mode');
+    switchTab('tabGacha');
+    // 手元操作画面が生きていれば最新状態をリクエストして即時同期
+    if (syncChannel) {
+      try {
+        syncChannel.postMessage({ type: 'REQ_SYNC' });
+      } catch (e) {}
+    }
+  } else if (urlParams.get('demo') === '1') {
     loadDemoGachaData();
   }
 
@@ -214,15 +224,102 @@ function loadSavedState() {
   }
 }
 
+// ==========================================================================
+// ローカルリアルタイム通信 (BroadcastChannel & storage event)
+// 仕様: 同一PC内のブラウザ間において、サーバーや外部ネットワークを経由せず、
+// ブラウザ標準のプロセス間通信機能を用いて数値を即座にゼロ遅延で同期する。
+// ==========================================================================
+
+let syncChannel = null;
+try {
+  if (typeof BroadcastChannel !== 'undefined') {
+    syncChannel = new BroadcastChannel('ba_gacha_live_sync');
+    syncChannel.onmessage = (event) => {
+      handleSyncMessage(event.data);
+    };
+  }
+} catch (e) {
+  console.warn('BroadcastChannel initialization error:', e);
+}
+
+function broadcastSyncState() {
+  if (!syncChannel) return;
+  try {
+    syncChannel.postMessage({
+      type: 'SYNC_STATE',
+      senderMode: document.body.classList.contains('stream-overlay-mode') ? 'overlay' : 'control',
+      payload: {
+        config: AppState.config,
+        pulls: AppState.pulls,
+        currentSession: AppState.currentSession,
+        isSinglePullMode: isSinglePullMode
+      }
+    });
+  } catch (e) {
+    console.warn('broadcastSyncState failed:', e);
+  }
+}
+
+function handleSyncMessage(data) {
+  if (!data || !data.type) return;
+
+  if (data.type === 'SYNC_STATE') {
+    const payload = data.payload;
+    if (!payload) return;
+
+    if (payload.config) AppState.config = payload.config;
+    if (payload.pulls) AppState.pulls = payload.pulls;
+    if (payload.currentSession) AppState.currentSession = payload.currentSession;
+    if (payload.isSinglePullMode !== undefined) isSinglePullMode = payload.isSinglePullMode;
+
+    recalculatePullsIndexAndCharge();
+    updateAllStats();
+
+    // 配信表示モード側（OBS）または別画面でシートを最新表示
+    const batches = getAllBatches();
+    if (batches.length > 0) {
+      const targetBatchId = (AppState.currentSession && AppState.currentSession.editingBatchId)
+        ? AppState.currentSession.editingBatchId
+        : batches[batches.length - 1];
+      loadBatchById(targetBatchId);
+    } else {
+      setupInputSheet();
+    }
+    renderSheetTimelineNav();
+  } else if (data.type === 'REQ_SYNC') {
+    // 配信画面起動時の同期リクエストに応答
+    broadcastSyncState();
+  }
+}
+
+// フォールバック: storage イベントでも同期
+window.addEventListener('storage', (e) => {
+  if (e.key && e.key.startsWith('ba_gacha_')) {
+    loadSavedState();
+    recalculatePullsIndexAndCharge();
+    updateAllStats();
+    const batches = getAllBatches();
+    if (batches.length > 0) {
+      loadBatchById(batches[batches.length - 1]);
+    } else {
+      setupInputSheet();
+    }
+  }
+});
+
 function persistState() {
   try {
     localStorage.setItem('ba_gacha_config', JSON.stringify(AppState.config));
     localStorage.setItem('ba_gacha_pulls', JSON.stringify(AppState.pulls));
     localStorage.setItem('ba_custom_students', JSON.stringify(AppState.customStudents));
     localStorage.setItem('ba_gacha_theme', AppState.theme);
+    localStorage.setItem('ba_gacha_session', JSON.stringify(AppState.currentSession));
   } catch (err) {
     console.error('Failed to persist state:', err);
   }
+
+  // 配信画面(OBS)へ即座に最新データを配信
+  broadcastSyncState();
 }
 
 function applyTheme(themeName) {
@@ -2606,17 +2703,69 @@ function initEventListeners() {
     btnUndo.addEventListener('click', undoLastPulls);
   }
 
-  // 6. 小窓化 & 配信UIボタン
+  // 6. 設定タブ内: 配信設定 (OBS Studio連携)
+  initStreamOverlayTools();
+}
+
+/**
+ * 配信表示モード (OBS Studio オーバーレイ) 関連ツールの初期化
+ */
+function initStreamOverlayTools() {
+  const urlInput = document.getElementById('streamOverlayUrlInput');
+  const btnCopy = document.getElementById('btnCopyOverlayUrl');
   const btnPopout = document.getElementById('btnPopoutWindow');
-  if (btnPopout) {
-    btnPopout.addEventListener('click', () => {
-      window.open(window.location.href, 'SchaleGachaTracker', 'width=460,height=760,menubar=no,toolbar=no');
+  const btnToggleStream = document.getElementById('btnToggleStreamMode');
+
+  // 現在のページURLからOBSオーバーレイ用URLを生成
+  let baseUrl = window.location.href.split('?')[0].split('#')[0];
+  let overlayUrl = baseUrl;
+  if (overlayUrl.startsWith('file:')) {
+    overlayUrl += '?mode=overlay#overlay';
+  } else {
+    overlayUrl += '?mode=overlay';
+  }
+
+  if (urlInput) {
+    urlInput.value = overlayUrl;
+    urlInput.addEventListener('click', () => {
+      urlInput.select();
     });
   }
-  const btnStream = document.getElementById('btnToggleStreamMode');
-  if (btnStream) {
-    btnStream.addEventListener('click', () => {
-      document.body.classList.toggle('stream-mode');
+
+  if (btnCopy) {
+    btnCopy.addEventListener('click', () => {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(overlayUrl).then(() => {
+          const orig = btnCopy.textContent;
+          btnCopy.textContent = '✅ コピー完了！';
+          setTimeout(() => { btnCopy.textContent = orig; }, 2000);
+        }).catch(() => {
+          if (urlInput) {
+            urlInput.select();
+            document.execCommand('copy');
+            alert('OBS用URLをクリップボードにコピーしました！\nOBSの「ブラウザ」ソースに貼り付けてください。');
+          }
+        });
+      } else if (urlInput) {
+        urlInput.select();
+        document.execCommand('copy');
+        alert('OBS用URLをクリップボードにコピーしました！\nOBSの「ブラウザ」ソースに貼り付けてください。');
+      }
+    });
+  }
+
+  if (btnPopout) {
+    btnPopout.addEventListener('click', () => {
+      window.open(overlayUrl, 'SchaleGachaOverlay', 'width=520,height=780,menubar=no,toolbar=no,location=no');
+    });
+  }
+
+  if (btnToggleStream) {
+    btnToggleStream.addEventListener('click', () => {
+      document.body.classList.toggle('stream-overlay-mode');
+      if (document.body.classList.contains('stream-overlay-mode')) {
+        switchTab('tabGacha');
+      }
     });
   }
 }

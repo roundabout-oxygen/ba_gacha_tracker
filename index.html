@@ -28,10 +28,6 @@
             <h1 class="brand-name">ブルアカガチャ集計</h1>
           </div>
         </div>
-        <div class="header-right-tools">
-          <button id="btnPopoutWindow" class="btn-tool-sm" title="配信用独立ウィンドウで開く">🗔 小窓化</button>
-          <button id="btnToggleStreamMode" class="btn-tool-sm btn-tool-stream" title="OBS用オーバーレイ切替">🎥 配信UI</button>
-        </div>
       </div>
 
       <!-- 添付1枚目準拠: 省スペース集計ステータスグリッド (上段3分割・下段2分割) -->
@@ -258,7 +254,7 @@
           <!-- 設定ヘッダー (タイトル & バージョン表記) -->
           <div class="settings-panel-header">
             <span class="card-head-title">⚙️ 設定</span>
-            <span class="version-badge" id="appVersionBadge">v1.0.22</span>
+            <span class="version-badge" id="appVersionBadge">v1.0.23</span>
           </div>
 
           <div class="settings-panel-body">
@@ -295,7 +291,27 @@
               </div>
             </div>
 
-            <!-- 2. 仮登録グループカード (添付画像 緑枠) -->
+            <!-- 2. 配信用設定 (OBS Studio連携) -->
+            <div class="settings-group-card">
+              <div class="settings-group-title">配信用設定 (OBS Studio連携)</div>
+              <p class="settings-group-desc">OBSのブラウザソースに下記URLを登録すると、背景透過で手元の操作とリアルタイムに同期します。</p>
+              <div class="settings-stream-tools">
+                <div class="stream-url-copy-box">
+                  <input type="text" id="streamOverlayUrlInput" class="styled-form-input stream-url-input" readonly placeholder="配信表示用URL生成中...">
+                  <button type="button" id="btnCopyOverlayUrl" class="btn-cyan-sm">📋 URLコピー</button>
+                </div>
+                <div class="stream-action-btns">
+                  <button type="button" id="btnPopoutWindow" class="btn-cyan-outline settings-group-btn" title="配信用独立ウィンドウで開く">
+                    🗔 小窓化（配信表示モード）
+                  </button>
+                  <button type="button" id="btnToggleStreamMode" class="btn-cyan-outline settings-group-btn" title="OBS用オーバーレイ切替">
+                    🎥 配信UIプレビュー切替
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- 3. 仮登録グループカード (添付画像 緑枠) -->
             <div class="settings-group-card">
               <div class="settings-group-title">仮登録</div>
               <div class="settings-custom-tools-btns">
@@ -308,7 +324,7 @@
               </div>
             </div>
 
-            <!-- 3. 最下部アクション: 生徒図鑑データを自動更新 & 全て初期化 (1行にまとめる) -->
+            <!-- 4. 最下部アクション: 生徒図鑑データを自動更新 & 全て初期化 (1行にまとめる) -->
             <div class="settings-bottom-actions-row">
               <button type="button" id="btnSyncWikiDirect" class="btn-cyan-outline-sm btn-bottom-action" title="ba_gacha_tabulationから最新生徒アイコンを自動同期">
                 🔄 生徒図鑑データを自動更新
