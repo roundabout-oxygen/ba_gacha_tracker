@@ -1,10 +1,10 @@
 /**
  * ブルーアーカイブ リアルタイムガチャ集計 (BA Gacha Live Tracker)
- * Version: v1.0.28
+ * Version: v1.0.29
  * Core Application Logic & State Management
  */
 
-const APP_VERSION = 'v1.0.28';
+const APP_VERSION = 'v1.0.29';
 const REMOTE_STUDENT_ICONS_URL = 'https://raw.githubusercontent.com/roundabout-oxygen/ba_gacha_tabulation/main/data/student_icons.json';
 
 // 単発 (1連) モードかどうかのフラグ (false = 10連モード, true = 1連モード)
@@ -614,8 +614,8 @@ function syncCurrentSessionToPulls() {
       AppState.pulls.splice(firstIdx, originalCount, ...updatedPulls);
     }
   } else {
-    // まだバッチIDがない新規シートの場合、生徒名またはpickに入力があったら正式追加
-    const hasAnyContent = targetRows.some(r => (r.studentName && r.studentName.trim()) || r.isPick);
+    // まだバッチIDがない新規シートの場合、生徒名・pick・newに入力があったら正式追加
+    const hasAnyContent = targetRows.some(r => (r.studentName && r.studentName.trim()) || r.isPick || r.isNew);
     if (hasAnyContent) {
       const batchId = 'batch_' + Date.now();
       session.editingBatchId = batchId;
@@ -672,7 +672,7 @@ function recalculateCurrentSessionCharges() {
   if (session.editingBatchId) {
     syncCurrentSessionToPulls();
   } else {
-    const hasAnyContent = rows.some(r => (r.studentName && r.studentName.trim()) || r.isPick);
+    const hasAnyContent = rows.some(r => (r.studentName && r.studentName.trim()) || r.isPick || r.isNew);
     if (hasAnyContent) {
       syncCurrentSessionToPulls();
     } else {
@@ -724,6 +724,10 @@ function recalculateCurrentSessionCharges() {
 
   updateAllStats();
   renderSheetTimelineNav();
+  renderDirectoryGrid();
+  renderConvergenceChart();
+  persistState();
+  broadcastSyncState();
 }
 
 // ==========================================================================
@@ -1505,7 +1509,7 @@ function renderInputSheetTable() {
     chkNew.dataset.rowIndex = idx;
     chkNew.addEventListener('change', (e) => {
       row.isNew = e.target.checked;
-      updateAllStats();
+      recalculateCurrentSessionCharges();
     });
     const boxNew = document.createElement('span');
     boxNew.className = 'custom-chk-box';
@@ -1966,11 +1970,20 @@ const convergenceRelativeMatrixPlugin = {
           ctx.drawImage(img, imgX, imgY, size, size);
           ctx.restore();
 
-          // 金色丸枠ボーダー (ba_gacha_tabulation忠実再現)
+          // 生徒アイコンの丸枠ボーダー (新規なら赤、50%すり抜けなら緑、ピックアップなら黄色)
+          let ringColor = '#c5a059';
+          if (pull.isPick) {
+            ringColor = '#f59e0b'; // ピックアップ: 黄色
+          } else if (pull.isGuaranteed50) {
+            ringColor = '#10b981'; // 50%すり抜け: 緑
+          } else if (pull.isNew) {
+            ringColor = '#ff3e6c'; // 新規: 赤
+          }
+
           ctx.save();
-          ctx.strokeStyle = '#c5a059';
-          ctx.lineWidth = 2.5;
-          ctx.shadowColor = 'rgba(0, 0, 0, 0.25)';
+          ctx.strokeStyle = ringColor;
+          ctx.lineWidth = 2.8;
+          ctx.shadowColor = 'rgba(0, 0, 0, 0.3)';
           ctx.shadowBlur = 4;
           ctx.shadowOffsetY = 1.5;
           ctx.beginPath();
@@ -2763,18 +2776,92 @@ function initStreamOverlayTools() {
     });
   }
 
+  // ウィンドウオープン管理用
+  let miniWindowRef = null;
+  const winW = 530;
+  const winH = Math.min(840, (window.screen && window.screen.availHeight ? window.screen.availHeight - 60 : 820));
+
+  function openMiniWindow(left, top) {
+    const l = (left !== undefined) ? left : Math.max(10, Math.floor(((window.screen.availWidth || 1920) - (winW * 2 + 16)) / 2));
+    const t = (top !== undefined) ? top : Math.max(10, Math.floor(((window.screen.availHeight || 1080) - winH) / 2));
+    const mini = window.open(baseUrl, 'SchaleGachaTrackerMini', `width=${winW},height=${winH},left=${l},top=${t},menubar=no,toolbar=no`);
+    if (mini) {
+      try { mini.focus(); } catch (e) {}
+      miniWindowRef = mini;
+    }
+    return mini;
+  }
+
+  function openOverlayWindow(left, top) {
+    const l = (left !== undefined) ? left : Math.max(10, Math.floor(((window.screen.availWidth || 1920) - (winW * 2 + 16)) / 2) + winW + 10);
+    const t = (top !== undefined) ? top : Math.max(10, Math.floor(((window.screen.availHeight || 1080) - winH) / 2));
+    const ov = window.open(overlayUrl, 'SchaleGachaOverlay', `width=${winW},height=${winH},left=${l},top=${t},menubar=no,toolbar=no,location=no`);
+    if (ov) {
+      try { ov.focus(); } catch (e) {}
+    }
+    return ov;
+  }
+
   // 1. 小窓化ボタン (手元の操作・編集用ウィンドウ)
-  // 今日の昼時点の通常の小窓モード (タブや入力シートがあってガチャを引いたり編集できる)
   if (btnPopout) {
     btnPopout.addEventListener('click', () => {
-      window.open(baseUrl, 'SchaleGachaTrackerMini', 'width=520,height=820,menubar=no,toolbar=no');
+      const availW = (window.screen && window.screen.availWidth) ? window.screen.availWidth : 1920;
+      const availH = (window.screen && window.screen.availHeight) ? window.screen.availHeight : 1080;
+      const totalWidth = winW * 2 + 14;
+      const startLeft = Math.max(10, Math.floor((availW - totalWidth) / 2));
+      const topPos = Math.max(10, Math.floor((availH - winH) / 2));
+      openMiniWindow(startLeft, topPos);
     });
   }
 
-  // 2. 配信プレビュー画面を開くボタン (OBS用オーバーレイ画面)
+  // 2. 配信プレビュー画面(OBS用)ボタン: 小窓とプレビューを並べて開く / 既に開いている小窓の右隣に開く
   if (btnOpenOverlay) {
     btnOpenOverlay.addEventListener('click', () => {
-      window.open(overlayUrl, 'SchaleGachaOverlay', 'width=520,height=820,menubar=no,toolbar=no,location=no');
+      const isCurrentlyMini = (window.name === 'SchaleGachaTrackerMini') || (window.outerWidth <= 650);
+
+      if (isCurrentlyMini) {
+        // 小窓自身の中で押された場合: その小窓の右隣にプレビューを開く
+        const curX = window.screenX !== undefined ? window.screenX : (window.screenLeft || 20);
+        const curY = window.screenY !== undefined ? window.screenY : (window.screenTop || 20);
+        const curW = window.outerWidth || winW;
+        openOverlayWindow(curX + curW + 8, curY);
+      } else {
+        // メイン画面で押された場合:
+        let miniX = null;
+        let miniY = null;
+        let miniWidth = winW;
+        let hasAliveMini = false;
+
+        if (miniWindowRef && !miniWindowRef.closed) {
+          try {
+            miniX = miniWindowRef.screenX !== undefined ? miniWindowRef.screenX : miniWindowRef.screenLeft;
+            miniY = miniWindowRef.screenY !== undefined ? miniWindowRef.screenY : miniWindowRef.screenTop;
+            miniWidth = miniWindowRef.outerWidth || winW;
+            hasAliveMini = true;
+            miniWindowRef.focus();
+          } catch (e) {}
+        }
+
+        if (hasAliveMini && miniX !== null) {
+          // 既に開いている小窓の右隣に開く
+          openOverlayWindow(miniX + miniWidth + 8, miniY);
+        } else {
+          // 小窓とプレビューの両方を左右に並べて同時に開く
+          const availW = (window.screen && window.screen.availWidth) ? window.screen.availWidth : 1920;
+          const availH = (window.screen && window.screen.availHeight) ? window.screen.availHeight : 1080;
+          const totalWidth = winW * 2 + 14;
+          const startLeft = Math.max(10, Math.floor((availW - totalWidth) / 2));
+          const topPos = Math.max(10, Math.floor((availH - winH) / 2));
+
+          const mini = openMiniWindow(startLeft, topPos);
+          openOverlayWindow(startLeft + winW + 10, topPos);
+          setTimeout(() => {
+            if (mini && !mini.closed) {
+              try { mini.focus(); } catch (e) {}
+            }
+          }, 150);
+        }
+      }
     });
   }
 
