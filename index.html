@@ -249,7 +249,7 @@
           <!-- 設定ヘッダー (タイトル & バージョン表記) -->
           <div class="settings-panel-header">
             <span class="card-head-title">⚙️ 設定</span>
-            <span class="version-badge" id="appVersionBadge">v1.0.25</span>
+            <span class="version-badge" id="appVersionBadge">v1.0.26</span>
           </div>
 
           <div class="settings-panel-body">
@@ -286,22 +286,30 @@
               </div>
             </div>
 
-            <!-- 2. 配信用設定 (OBS Studio連携) -->
+            <!-- 2. 小窓化 ＆ 配信連携設定 (OBS Studio) -->
             <div class="settings-group-card">
-              <div class="settings-group-title">配信用設定 (OBS Studio連携)</div>
-              <p class="settings-group-desc">OBSのブラウザソースに下記URLを登録すると、背景透過で手元の操作とリアルタイムに同期します。</p>
+              <div class="settings-group-title">小窓化 ＆ 配信連携 (OBS Studio)</div>
+              <p class="settings-group-desc">
+                手元で操作・入力を行うための<b>操作小窓</b>と、OBSに表示する<b>配信用オーバーレイ</b>を分離してご利用いただけます。
+              </p>
               <div class="settings-stream-tools">
-                <div class="stream-url-copy-box">
-                  <input type="text" id="streamOverlayUrlInput" class="styled-form-input stream-url-input" readonly placeholder="配信表示用URL生成中...">
-                  <button type="button" id="btnCopyOverlayUrl" class="btn-cyan-sm">📋 URLコピー</button>
-                </div>
+                <!-- 小窓化ボタン & 配信プレビューボタン -->
                 <div class="stream-action-btns">
-                  <button type="button" id="btnPopoutWindow" class="btn-cyan-outline settings-group-btn" title="配信用独立ウィンドウで開く">
-                    🗔 小窓化（配信表示モード）
+                  <button type="button" id="btnPopoutWindow" class="btn-cyan-outline settings-group-btn" title="手元でガチャ入力・編集ができる独立ウィンドウを開きます">
+                    🗔 小窓化（手元の操作・編集用）
                   </button>
-                  <button type="button" id="btnToggleStreamMode" class="btn-cyan-outline settings-group-btn" title="OBS用オーバーレイ切替">
-                    🎥 配信UIプレビュー切替
+                  <button type="button" id="btnOpenOverlayWindow" class="btn-cyan-outline settings-group-btn" title="OBSに表示される配信用プレビュー画面を別ウィンドウで開きます">
+                    🎥 配信プレビュー画面を開く (OBS用)
                   </button>
+                </div>
+
+                <!-- OBSブラウザソースURL -->
+                <div class="stream-url-block" style="margin-top: 4px;">
+                  <div class="stream-url-label" style="font-size: 11px; font-weight: 700; color: var(--text-muted); margin-bottom: 4px;">OBSブラウザソース用URL:</div>
+                  <div class="stream-url-copy-box">
+                    <input type="text" id="streamOverlayUrlInput" class="styled-form-input stream-url-input" readonly placeholder="配信表示用URL生成中...">
+                    <button type="button" id="btnCopyOverlayUrl" class="btn-cyan-sm">📋 URLコピー</button>
+                  </div>
                 </div>
               </div>
             </div>

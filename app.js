@@ -1,10 +1,10 @@
 /**
  * ブルーアーカイブ リアルタイムガチャ集計 (BA Gacha Live Tracker)
- * Version: v1.0.25
+ * Version: v1.0.26
  * Core Application Logic & State Management
  */
 
-const APP_VERSION = 'v1.0.25';
+const APP_VERSION = 'v1.0.26';
 const REMOTE_STUDENT_ICONS_URL = 'https://raw.githubusercontent.com/roundabout-oxygen/ba_gacha_tabulation/main/data/student_icons.json';
 
 // 単発 (1連) モードかどうかのフラグ (false = 10連モード, true = 1連モード)
@@ -2722,6 +2722,7 @@ function initStreamOverlayTools() {
   const urlInput = document.getElementById('streamOverlayUrlInput');
   const btnCopy = document.getElementById('btnCopyOverlayUrl');
   const btnPopout = document.getElementById('btnPopoutWindow');
+  const btnOpenOverlay = document.getElementById('btnOpenOverlayWindow');
   const btnToggleStream = document.getElementById('btnToggleStreamMode');
 
   // 現在のページURLからOBSオーバーレイ用URLを生成
@@ -2762,9 +2763,18 @@ function initStreamOverlayTools() {
     });
   }
 
+  // 1. 小窓化ボタン (手元の操作・編集用ウィンドウ)
+  // 今日の昼時点の通常の小窓モード (タブや入力シートがあってガチャを引いたり編集できる)
   if (btnPopout) {
     btnPopout.addEventListener('click', () => {
-      window.open(overlayUrl, 'SchaleGachaOverlay', 'width=520,height=780,menubar=no,toolbar=no,location=no');
+      window.open(baseUrl, 'SchaleGachaTrackerMini', 'width=520,height=820,menubar=no,toolbar=no');
+    });
+  }
+
+  // 2. 配信プレビュー画面を開くボタン (OBS用オーバーレイ画面)
+  if (btnOpenOverlay) {
+    btnOpenOverlay.addEventListener('click', () => {
+      window.open(overlayUrl, 'SchaleGachaOverlay', 'width=520,height=820,menubar=no,toolbar=no,location=no');
     });
   }
 
