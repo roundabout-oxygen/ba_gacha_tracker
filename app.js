@@ -1,10 +1,10 @@
 /**
  * ブルーアーカイブ リアルタイムガチャ集計 (BA Gacha Live Tracker)
- * Version: v1.0.23
+ * Version: v1.0.24
  * Core Application Logic & State Management
  */
 
-const APP_VERSION = 'v1.0.23';
+const APP_VERSION = 'v1.0.24';
 const REMOTE_STUDENT_ICONS_URL = 'https://raw.githubusercontent.com/roundabout-oxygen/ba_gacha_tabulation/main/data/student_icons.json';
 
 // 単発 (1連) モードかどうかのフラグ (false = 10連モード, true = 1連モード)
@@ -96,6 +96,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // 初回ダッシュボード描画
   updateAllStats();
+  renderDirectoryGrid();
   renderConvergenceChart();
 
   // URLパラメータの解釈 (テスト・自動検証用 & 配信モード判定)
@@ -103,7 +104,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const isOverlayMode = urlParams.get('mode') === 'overlay' || urlParams.get('mode') === 'stream' || window.location.hash === '#overlay';
   if (isOverlayMode) {
     document.body.classList.add('stream-overlay-mode');
-    switchTab('tabGacha');
+    switchTab('tabDashboard');
+    renderConvergenceChart();
     // 手元操作画面が生きていれば最新状態をリクエストして即時同期
     if (syncChannel) {
       try {
@@ -274,18 +276,24 @@ function handleSyncMessage(data) {
 
     recalculatePullsIndexAndCharge();
     updateAllStats();
+    renderDirectoryGrid();
+    renderConvergenceChart();
 
-    // 配信表示モード側（OBS）または別画面でシートを最新表示
-    const batches = getAllBatches();
-    if (batches.length > 0) {
-      const targetBatchId = (AppState.currentSession && AppState.currentSession.editingBatchId)
-        ? AppState.currentSession.editingBatchId
-        : batches[batches.length - 1];
-      loadBatchById(targetBatchId);
+    // 配信表示モード側（OBS）または別画面でシート・ダッシュボードを最新表示
+    if (document.body.classList.contains('stream-overlay-mode')) {
+      switchTab('tabDashboard');
     } else {
-      setupInputSheet();
+      const batches = getAllBatches();
+      if (batches.length > 0) {
+        const targetBatchId = (AppState.currentSession && AppState.currentSession.editingBatchId)
+          ? AppState.currentSession.editingBatchId
+          : batches[batches.length - 1];
+        loadBatchById(targetBatchId);
+      } else {
+        setupInputSheet();
+      }
+      renderSheetTimelineNav();
     }
-    renderSheetTimelineNav();
   } else if (data.type === 'REQ_SYNC') {
     // 配信画面起動時の同期リクエストに応答
     broadcastSyncState();
@@ -2764,7 +2772,8 @@ function initStreamOverlayTools() {
     btnToggleStream.addEventListener('click', () => {
       document.body.classList.toggle('stream-overlay-mode');
       if (document.body.classList.contains('stream-overlay-mode')) {
-        switchTab('tabGacha');
+        switchTab('tabDashboard');
+        renderConvergenceChart();
       }
     });
   }

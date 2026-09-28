@@ -2911,14 +2911,14 @@ body.theme-tactical-dark .ba-card-sample {
 }
 
 /* ==========================================================================
-   配信表示モード (OBS Studio オーバーレイ用・完全透過 & 大画面情報強調)
+   配信表示モード (OBS Studio オーバーレイ用・添付1枚目準拠のクリーン配置)
    ========================================================================== */
 html:has(body.stream-overlay-mode),
 body.stream-overlay-mode {
   background: transparent !important;
   background-color: transparent !important;
   margin: 0 !important;
-  padding: 8px !important;
+  padding: 6px !important;
   overflow: hidden !important;
 }
 
@@ -2930,13 +2930,10 @@ body.stream-overlay-mode .app-layout-container {
   background: transparent !important;
 }
 
-/* タイトル行・操作パーツ・タブを徹底排除 (ノイズの完全排除) */
+/* 操作パーツ・タブ・不要画面を徹底排除 (ノイズの完全排除) */
 body.stream-overlay-mode .header-main-row,
 body.stream-overlay-mode .main-tabs-nav,
-body.stream-overlay-mode .sheet-control-actions-2rows,
-body.stream-overlay-mode .sheet-timeline-nav,
-body.stream-overlay-mode .sheet-page-indicator-badge,
-body.stream-overlay-mode #tabDashboard,
+body.stream-overlay-mode #tabGacha,
 body.stream-overlay-mode #tabHistory,
 body.stream-overlay-mode #tabSettings,
 body.stream-overlay-mode .schale-dialog,
@@ -2944,179 +2941,56 @@ body.stream-overlay-mode #studentGuidePopup {
   display: none !important;
 }
 
-/* ガチャ結果タブのみを常時全開表示 */
-body.stream-overlay-mode #tabGacha {
-  display: block !important;
-}
-
-/* 上部ステータスバー: 半透明グラス ＆ 視認性大幅強化 */
-body.stream-overlay-mode .app-top-header {
-  background: rgba(15, 23, 42, 0.85) !important;
-  backdrop-filter: blur(10px) !important;
-  -webkit-backdrop-filter: blur(10px) !important;
-  border: 1px solid rgba(0, 194, 255, 0.5) !important;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6) !important;
-  border-radius: 12px !important;
-  padding: 10px 14px !important;
-}
-
-body.stream-overlay-mode .compact-stats-grid {
-  gap: 8px 12px !important;
-}
-
-body.stream-overlay-mode .cstat-lbl {
-  font-size: 13px !important;
-  font-weight: 700 !important;
-  color: #94a3b8 !important;
-  text-shadow: 0 1px 2px rgba(0,0,0,0.8) !important;
-}
-
-body.stream-overlay-mode .cstat-main-num {
-  font-size: 26px !important;
-  font-weight: 900 !important;
-  letter-spacing: -0.5px !important;
-  text-shadow: 0 2px 4px rgba(0,0,0,0.9), 0 0 6px rgba(0, 194, 255, 0.6) !important;
-}
-
-body.stream-overlay-mode .cstat-sub-txt {
-  font-size: 14px !important;
-  color: #cbd5e1 !important;
-  text-shadow: 0 1px 2px rgba(0,0,0,0.8) !important;
-}
-
-body.stream-overlay-mode .ccharge-val-num {
-  font-size: 22px !important;
-  font-weight: 900 !important;
-  text-shadow: 0 2px 4px rgba(0,0,0,0.9) !important;
-}
-
-body.stream-overlay-mode .charge-progress-bar-wrap {
-  height: 12px !important;
-  border-radius: 6px !important;
-  background: rgba(0, 0, 0, 0.6) !important;
-  border: 1px solid rgba(0, 194, 255, 0.3) !important;
-}
-
-/* ガチャ結果テーブルカード: 半透明グラス */
-body.stream-overlay-mode .tab-view-content {
-  background: rgba(15, 23, 42, 0.82) !important;
-  backdrop-filter: blur(10px) !important;
-  -webkit-backdrop-filter: blur(10px) !important;
-  border: 1px solid rgba(0, 194, 255, 0.4) !important;
-  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.6) !important;
-  border-radius: 12px !important;
-  padding: 10px 12px !important;
-}
-
-/* テーブルスタイル: 入力フォームを消してクリーンな結果表示カード化 */
-body.stream-overlay-mode .gacha-sheet-table {
-  border-collapse: separate !important;
-  border-spacing: 0 4px !important;
-}
-
-body.stream-overlay-mode .gacha-sheet-table th {
-  background: rgba(11, 17, 26, 0.7) !important;
-  color: #94a3b8 !important;
-  font-size: 13px !important;
-  padding: 6px 8px !important;
-  border-bottom: 2px solid rgba(0, 194, 255, 0.4) !important;
-}
-
-body.stream-overlay-mode .gacha-sheet-table tbody tr {
-  background: rgba(30, 41, 59, 0.6) !important;
-  border-radius: 8px !important;
-  transition: all 0.2s ease !important;
-}
-
-/* ☆3出現行の豪華な発光演出 */
-body.stream-overlay-mode .gacha-sheet-table tbody tr:has(.sheet-student-input.has-value) {
-  background: rgba(30, 58, 138, 0.5) !important;
-  border-left: 3px solid #00c2ff !important;
-}
-
-body.stream-overlay-mode .gacha-sheet-table tbody tr:has(.sheet-student-input.is-pickup) {
-  background: rgba(180, 83, 9, 0.5) !important;
-  border-left: 3px solid #f59e0b !important;
-}
-
-/* 100/200天井行 */
-body.stream-overlay-mode .gacha-sheet-table tbody tr.row-charge-100 {
-  background: rgba(88, 28, 135, 0.55) !important;
-  border-left: 3px solid #c084fc !important;
-}
-
-body.stream-overlay-mode .gacha-sheet-table td {
-  padding: 6px 10px !important;
-  font-size: 15px !important;
-  color: #f8fafc !important;
-  text-shadow: 0 1px 2px rgba(0,0,0,0.8) !important;
-  border: none !important;
-}
-
-body.stream-overlay-mode .col-num,
-body.stream-overlay-mode .col-total {
-  font-weight: 700 !important;
-  color: #94a3b8 !important;
-}
-
-body.stream-overlay-mode .col-charge {
-  font-weight: 900 !important;
-  font-size: 16px !important;
-}
-
-/* 入力ボックスをテキスト表示化（枠・背景なし、カーソルなし） */
-body.stream-overlay-mode .sheet-student-input {
+/* 集計ダッシュボード (添付1枚目: 排出☆3生徒カード一覧 ＆ 確率収束グラフ) を常時全開表示 */
+body.stream-overlay-mode #tabDashboard {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 8px !important;
   background: transparent !important;
   border: none !important;
   box-shadow: none !important;
-  color: #ffffff !important;
-  font-size: 16px !important;
-  font-weight: 800 !important;
-  pointer-events: none !important;
-  caret-color: transparent !important;
-  padding: 0 4px !important;
-  text-shadow: 0 1px 3px rgba(0,0,0,0.9) !important;
+  padding: 0 !important;
 }
 
-/* 生徒アイコンを大画面で見やすく拡大 */
-body.stream-overlay-mode .sheet-student-avatar-slot {
-  width: 36px !important;
-  height: 36px !important;
+/* 上部ステータスバー: 添付1枚目準拠のクリアでシャープなカード (過剰なシャドウを全撤廃) */
+body.stream-overlay-mode .app-top-header {
+  background: #ffffff !important;
+  border: 2px solid #00c2ff !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12) !important;
+  border-radius: 10px !important;
+  padding: 8px 12px !important;
 }
 
-body.stream-overlay-mode .sheet-student-avatar-img {
-  width: 36px !important;
-  height: 36px !important;
-  border-radius: 6px !important;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.6) !important;
+/* ボヤけの原因だった text-shadow を全撤廃し、フォントをシャープ・高解像度化 */
+body.stream-overlay-mode .cstat-lbl,
+body.stream-overlay-mode .cstat-main-num,
+body.stream-overlay-mode .cstat-sub-txt,
+body.stream-overlay-mode .ccharge-val-num,
+body.stream-overlay-mode .card-head-title,
+body.stream-overlay-mode .three-star-card-name,
+body.stream-overlay-mode .three-star-card-sub {
+  text-shadow: none !important;
 }
 
-/* チェックボックス枠をバッジ化 */
-body.stream-overlay-mode .col-chk {
-  pointer-events: none !important;
+/* 排出☆3生徒カード一覧エリア (添付1枚目準拠) */
+body.stream-overlay-mode .three-star-section-box {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
 }
 
-body.stream-overlay-mode .sheet-chk-label input[type="checkbox"] {
-  display: none !important;
+body.stream-overlay-mode .three-star-card {
+  background: #ffffff !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1) !important;
 }
 
-body.stream-overlay-mode .custom-chk-box {
-  display: none !important;
-}
-
-/* pickチェックが入っている行は目立つバッジを表示 */
-body.stream-overlay-mode .chk-pick:has(input[type="checkbox"]:checked) .custom-chk-box {
-  display: inline-flex !important;
-  background: #f59e0b !important;
-  color: #ffffff !important;
-  border-radius: 4px !important;
-  padding: 2px 6px !important;
-  font-size: 11px !important;
-  font-weight: 900 !important;
-  width: auto !important;
-  height: auto !important;
-}
-body.stream-overlay-mode .chk-pick:has(input[type="checkbox"]:checked) .custom-chk-box::after {
-  content: 'PU';
-  margin-left: 2px;
+/* 確率収束グラフカード (添付1枚目準拠) */
+body.stream-overlay-mode .chart-container-card {
+  background: #ffffff !important;
+  border: 2px solid #00c2ff !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12) !important;
+  border-radius: 10px !important;
+  padding: 10px 14px !important;
 }
