@@ -260,19 +260,33 @@ body {
   line-height: 1.2;
 }
 
-.cstat-val-row {
+/* 主役セル: 累計 ＆ ☆3確率 (見出し左上・数値右寄せ・特大表示) */
+.cstat-cell-primary {
   display: flex;
+  flex-direction: row;
   align-items: baseline;
-  gap: 4px;
-  flex-wrap: nowrap;
+  justify-content: space-between;
+  padding: 4px 10px;
+}
+
+.cstat-cell-primary .cstat-lbl {
+  align-self: flex-start;
+  margin-top: 3px;
+  white-space: nowrap;
+}
+
+.cstat-cell-primary .cstat-val-row {
+  margin-left: auto;
+  justify-content: flex-end;
+  align-items: baseline;
 }
 
 /* 主役: 累計 ＆ ☆3確率 (大きく表示) */
 .cstat-num-large {
   font-family: var(--font-mono);
-  font-size: 22px;
+  font-size: 28px;
   font-weight: 900;
-  line-height: 1.15;
+  line-height: 1;
   color: var(--text-main);
   white-space: nowrap;
   letter-spacing: -0.5px;
@@ -280,9 +294,9 @@ body {
 
 .cstat-unit {
   font-family: var(--font-sans);
-  font-size: 13.5px;
-  font-weight: 700;
-  margin-left: 2px;
+  font-size: 16px;
+  font-weight: 800;
+  margin-left: 3px;
   color: var(--text-main);
 }
 
@@ -2984,7 +2998,11 @@ body.stream-overlay-mode .three-star-card-sub {
 }
 
 body.stream-overlay-mode .cstat-num-large {
-  font-size: 25px !important;
+  font-size: 30px !important;
+}
+
+body.stream-overlay-mode .cstat-unit {
+  font-size: 17px !important;
 }
 
 body.stream-overlay-mode .cstat-num-small {
