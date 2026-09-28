@@ -260,18 +260,19 @@ body {
   line-height: 1.2;
 }
 
-/* 主役セル: 累計 ＆ ☆3確率 (見出し左上・数値右寄せ・特大表示) */
+/* 主役セル: 累計 ＆ ☆3確率 (見出し左上・数値右寄せ・上下方向中央配置) */
 .cstat-cell-primary {
   display: flex;
   flex-direction: row;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   padding: 4px 10px;
+  position: relative;
 }
 
 .cstat-cell-primary .cstat-lbl {
   align-self: flex-start;
-  margin-top: 3px;
+  margin-top: 5px;
   white-space: nowrap;
 }
 
@@ -279,6 +280,7 @@ body {
   margin-left: auto;
   justify-content: flex-end;
   align-items: baseline;
+  align-self: center;
 }
 
 /* 主役: 累計 ＆ ☆3確率 (大きく表示) */
