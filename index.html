@@ -30,56 +30,51 @@
         </div>
       </div>
 
-      <!-- 添付1枚目準拠: 省スペース集計ステータスグリッド (上段3分割・下段2分割) -->
+      <!-- 集計ステータスグリッド (累計・☆3確率を主役に拡大、PU確率・50%勝率は小型化) -->
       <div class="compact-stats-grid" id="miniStatsBar">
-        <!-- 1段目 左: ☆３確率 -->
-        <div class="cstat-cell">
-          <div class="cstat-lbl">☆３確率</div>
-          <div class="cstat-val-row">
-            <span class="cstat-main-num text-cyan"><span id="liveStatThreeStarRate">0.00</span>%</span>
-            <span class="cstat-sub-txt"><b id="liveStatThreeStarCount">0</b>人</span>
-          </div>
-        </div>
-
-        <!-- 1段目 中: 累計 -->
-        <div class="cstat-cell">
+        <!-- 1段目 左: 累計 (大きく表示、石の数は削除) -->
+        <div class="cstat-cell cstat-cell-primary cstat-total-cell">
           <div class="cstat-lbl">累計</div>
           <div class="cstat-val-row">
-            <span class="cstat-main-num"><span id="liveStatTotalPulls">0</span> 連</span>
-            <span class="cstat-sub-txt"><b id="liveStatPyroxene">0</b> 石</span>
+            <span class="cstat-main-num cstat-num-large"><span id="liveStatTotalPulls">0</span><span class="cstat-unit"> 連</span></span>
           </div>
         </div>
 
-        <!-- 1段目 右: PU確率 -->
-        <div class="cstat-cell cstat-pu-cell">
+        <!-- 1段目 中: ☆３確率 (大きく表示、人数は削除) -->
+        <div class="cstat-cell cstat-cell-primary cstat-rate-cell">
+          <div class="cstat-lbl">☆３確率</div>
+          <div class="cstat-val-row">
+            <span class="cstat-main-num cstat-num-large text-cyan"><span id="liveStatThreeStarRate">0.00</span><span class="cstat-unit">%</span></span>
+          </div>
+        </div>
+
+        <!-- 1段目 右: PU確率 (パーセントのみ、小型) -->
+        <div class="cstat-cell cstat-cell-secondary cstat-pu-cell">
           <div class="cstat-lbl">PU確率</div>
-          <div class="cstat-val-row cstat-pu-val-row">
-            <span class="cstat-main-num text-gold"><span id="liveStatPickupRate">0.00</span>%</span>
-            <div class="cstat-sub-stacked">
-              <span class="cstat-sub-count"><b id="liveStatPickupCount">0</b>人</span>
-              <span class="cstat-sub-expected">(期待値<span id="liveStatPickupExpected">0.0</span>人)</span>
-            </div>
+          <div class="cstat-val-row">
+            <span class="cstat-main-num cstat-num-small text-gold"><span id="liveStatPickupRate">0.00</span>%</span>
           </div>
         </div>
 
-        <!-- 2段目 左: チャージ (2列分幅広) -->
+        <!-- 2段目 左〜中: チャージ (2列分幅広) -->
         <div class="cstat-cell cstat-charge-cell">
           <div class="ccharge-header">
             <span class="cstat-lbl">チャージ</span>
-            <span class="ccharge-val-num" id="liveStatChargeText">0 / 100</span>
+            <div class="ccharge-meta-right">
+              <span class="ccharge-foot-txt" id="liveChargeSub">あと 100連</span>
+              <span class="ccharge-val-num" id="liveStatChargeText">0 / 100</span>
+            </div>
           </div>
           <div class="ccharge-bar-track">
             <div class="ccharge-bar-fill" id="liveChargeProgressFill" style="width: 0%;"></div>
           </div>
-          <div class="ccharge-foot-txt" id="liveChargeSub">あと 100連</div>
         </div>
 
-        <!-- 2段目 右: 50%勝率 -->
-        <div class="cstat-cell cstat-win-cell">
+        <!-- 2段目 右: 50%勝率 (〇勝〇敗のみ、小型) -->
+        <div class="cstat-cell cstat-cell-secondary cstat-win-cell">
           <div class="cstat-lbl">50%勝率</div>
           <div class="cstat-val-row">
-            <span class="cstat-main-num text-green"><span id="liveStatWinRate">0.0</span>%</span>
-            <span class="cstat-sub-txt"><b id="liveStatWinCount">0</b>勝 <b id="liveStatLossCount">0</b>敗</span>
+            <span class="cstat-win-record"><b id="liveStatWinCount">0</b>勝 <b id="liveStatLossCount">0</b>敗</span>
           </div>
         </div>
       </div>
@@ -254,7 +249,7 @@
           <!-- 設定ヘッダー (タイトル & バージョン表記) -->
           <div class="settings-panel-header">
             <span class="card-head-title">⚙️ 設定</span>
-            <span class="version-badge" id="appVersionBadge">v1.0.24</span>
+            <span class="version-badge" id="appVersionBadge">v1.0.25</span>
           </div>
 
           <div class="settings-panel-body">

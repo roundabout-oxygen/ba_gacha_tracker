@@ -227,11 +227,11 @@ body {
 }
 
 /* ==========================================================================
-   1. 添付1枚目準拠: 省スペース集計ステータスグリッド (上段3分割・下段2分割)
+   1. 省スペース集計ステータスグリッド (累計・☆3確率主役拡大、PU確率・50%勝率小型化)
    ========================================================================== */
 .compact-stats-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr 1.2fr;
+  grid-template-columns: 1.35fr 1.35fr 0.8fr;
   background: var(--bg-card);
   border: 1.5px solid var(--border);
   border-radius: var(--radius-md);
@@ -240,7 +240,7 @@ body {
 }
 
 .cstat-cell {
-  padding: 5px 8px;
+  padding: 5px 10px;
   border-right: 1px solid rgba(0, 174, 239, 0.15);
   border-bottom: 1px solid rgba(0, 174, 239, 0.15);
   display: flex;
@@ -263,65 +263,60 @@ body {
 .cstat-val-row {
   display: flex;
   align-items: baseline;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-
-.cstat-main-num {
-  font-family: var(--font-mono);
-  font-size: 16px;
-  font-weight: 800;
-  line-height: 1.2;
-  color: var(--text-main);
-  white-space: nowrap;
-}
-
-.cstat-sub-txt {
-  font-size: 10.5px;
-  color: var(--text-muted);
-  white-space: nowrap;
-}
-
-/* PU確率の縦積み表示 (上段: 1人 / 下段: (期待値1.4人)) */
-.cstat-pu-val-row {
-  display: flex;
-  align-items: center;
-  gap: 5px;
+  gap: 4px;
   flex-wrap: nowrap;
 }
 
-.cstat-sub-stacked {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: flex-start;
+/* 主役: 累計 ＆ ☆3確率 (大きく表示) */
+.cstat-num-large {
+  font-family: var(--font-mono);
+  font-size: 22px;
+  font-weight: 900;
   line-height: 1.15;
-}
-
-.cstat-sub-count {
-  font-size: 11px;
-  font-weight: 700;
   color: var(--text-main);
   white-space: nowrap;
+  letter-spacing: -0.5px;
 }
 
-.cstat-sub-count b {
+.cstat-unit {
+  font-family: var(--font-sans);
+  font-size: 13.5px;
+  font-weight: 700;
+  margin-left: 2px;
+  color: var(--text-main);
+}
+
+/* 控えめ: PU確率 (パーセントのみ、小型) */
+.cstat-num-small {
   font-family: var(--font-mono);
-  font-size: 12.5px;
-  color: var(--gold);
+  font-size: 14.5px;
+  font-weight: 800;
+  line-height: 1.2;
+  white-space: nowrap;
 }
 
-.cstat-sub-expected {
-  font-size: 9px;
-  font-weight: 600;
-  color: var(--text-muted);
+/* 控えめ: 50%勝率 (〇勝〇敗のみ、小型) */
+.cstat-win-record {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--text-main);
   white-space: nowrap;
+  line-height: 1.2;
+}
+
+.cstat-win-record b {
+  font-size: 14px;
+  font-weight: 900;
+  color: var(--text-main);
 }
 
 /* チャージセル (2列幅) */
 .cstat-charge-cell {
   grid-column: span 2;
   border-bottom: none;
+  padding-top: 4px;
+  padding-bottom: 5px;
 }
 
 .ccharge-header {
@@ -330,11 +325,25 @@ body {
   align-items: baseline;
 }
 
+.ccharge-meta-right {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.ccharge-foot-txt {
+  font-size: 10.5px;
+  color: var(--text-muted);
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
 .ccharge-val-num {
   font-family: var(--font-mono);
-  font-size: 11.5px;
-  font-weight: 700;
+  font-size: 12px;
+  font-weight: 800;
   color: var(--primary);
+  white-space: nowrap;
   transition: color 0.3s ease;
 }
 
@@ -348,7 +357,7 @@ body {
   background: rgba(0, 0, 0, 0.08);
   border-radius: 4px;
   overflow: hidden;
-  margin: 3px 0 2px;
+  margin: 3px 0 1px;
 }
 
 body.theme-tactical-dark .ccharge-bar-track {
@@ -367,16 +376,13 @@ body.theme-tactical-dark .ccharge-bar-track {
   box-shadow: 0 0 8px rgba(255, 62, 108, 0.45);
 }
 
-.ccharge-foot-txt {
-  font-size: 10px;
-  color: var(--text-muted);
-  line-height: 1.1;
-}
-
 /* 50%勝率セル (1列幅) */
 .cstat-win-cell {
   border-right: none;
   border-bottom: none;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
 
 /* ==========================================================================
@@ -2964,12 +2970,29 @@ body.stream-overlay-mode .app-top-header {
 /* ボヤけの原因だった text-shadow を全撤廃し、フォントをシャープ・高解像度化 */
 body.stream-overlay-mode .cstat-lbl,
 body.stream-overlay-mode .cstat-main-num,
+body.stream-overlay-mode .cstat-num-large,
+body.stream-overlay-mode .cstat-num-small,
+body.stream-overlay-mode .cstat-unit,
+body.stream-overlay-mode .cstat-win-record,
 body.stream-overlay-mode .cstat-sub-txt,
 body.stream-overlay-mode .ccharge-val-num,
+body.stream-overlay-mode .ccharge-foot-txt,
 body.stream-overlay-mode .card-head-title,
 body.stream-overlay-mode .three-star-card-name,
 body.stream-overlay-mode .three-star-card-sub {
   text-shadow: none !important;
+}
+
+body.stream-overlay-mode .cstat-num-large {
+  font-size: 25px !important;
+}
+
+body.stream-overlay-mode .cstat-num-small {
+  font-size: 16px !important;
+}
+
+body.stream-overlay-mode .cstat-win-record {
+  font-size: 14px !important;
 }
 
 /* 排出☆3生徒カード一覧エリア (添付1枚目準拠) */
