@@ -1,10 +1,10 @@
 /**
  * ブルーアーカイブ リアルタイムガチャ集計 (BA Gacha Live Tracker)
- * Version: v1.0.32
+ * Version: v1.0.33
  * Core Application Logic & State Management
  */
 
-const APP_VERSION = 'v1.0.32';
+const APP_VERSION = 'v1.0.33';
 const REMOTE_STUDENT_ICONS_URL = 'https://raw.githubusercontent.com/roundabout-oxygen/ba_gacha_tabulation/main/data/student_icons.json';
 
 // 単発 (1連) モードかどうかのフラグ (false = 10連モード, true = 1連モード)
@@ -1235,40 +1235,70 @@ function addNewBatchImmediately() {
 }
 
 /**
- * 「この10連を削除」: 表示されているバッチを履歴から削除し、前の引きに戻る
+ * 「この10連を削除」: 表示されているバッチを履歴から完全に削除し、前の引きに戻る
  */
 function deleteCurrentBatch() {
   const batches = getAllBatches();
-  if (batches.length === 0 && !AppState.currentSession.editingBatchId) return;
+  
+  // バッチが一切ない場合（初期シート入力中など）は入力シートを白紙リセット
+  if (batches.length === 0) {
+    AppState.currentSession.editingBatchId = null;
+    AppState.currentSession.rows = [];
+    setupInputSheet();
+    updateAllStats();
+    renderHistoryTable();
+    renderDirectoryGrid();
+    renderConvergenceChart();
+    updateSheetPageIndicator();
+    broadcastSyncState();
+    return;
+  }
 
+  // 1. 削除対象のバッチIDとインデックスを特定
   let targetBatchId = AppState.currentSession.editingBatchId;
-  if (!targetBatchId) {
-    // 新規入力中なら直前のバッチを削除
-    targetBatchId = batches[batches.length - 1];
+  let targetIdx = -1;
+  if (targetBatchId) {
+    targetIdx = batches.indexOf(targetBatchId);
+  } else {
+    // editingBatchId がない場合は最新バッチ
+    targetIdx = batches.length - 1;
+    targetBatchId = batches[targetIdx];
   }
 
   if (!targetBatchId) return;
 
-  // 対象バッチの削除
+  // 2. pulls から対象バッチを完全に削除
   AppState.pulls = AppState.pulls.filter(p => p.batchId !== targetBatchId);
+
+  // 3. 重要: 現在のセッションの rows と editingBatchId を完全クリア！
+  // (クリアしないと、loadPreviousBatch等の保存判定でゾンビデータとして再コミットされてしまうため)
+  AppState.currentSession.editingBatchId = null;
+  AppState.currentSession.rows = [];
+
+  // 4. 連番・チャージの整合性を再計算して保存
   recalculatePullsIndexAndCharge();
   persistState();
+
+  // 5. 削除後の再表示バッチを決定
+  const remainingBatches = getAllBatches();
+  if (remainingBatches.length > 0) {
+    // 削除した位置の1つ前（直前）のバッチを表示。先頭だったなら残りの先頭を表示
+    let nextIdx = targetIdx - 1;
+    if (nextIdx < 0) nextIdx = 0;
+    if (nextIdx >= remainingBatches.length) nextIdx = remainingBatches.length - 1;
+    loadBatchById(remainingBatches[nextIdx]);
+    triggerSheetSlideAnimation('left');
+  } else {
+    // 全てのバッチが削除されたら、新規初期シートをセットアップ
+    setupInputSheet();
+    triggerSheetSlideAnimation('left');
+  }
+
+  // 6. UI・統計・履歴・グラフ・配信用通信をすべて最新化
   updateAllStats();
   renderHistoryTable();
   renderDirectoryGrid();
   renderConvergenceChart();
-
-  // 削除後の再表示: 残りのバッチがあれば直前を表示、なければ新規初期化
-  const remainingBatches = getAllBatches();
-  if (remainingBatches.length > 0) {
-    AppState.currentSession.editingBatchId = null;
-    loadPreviousBatch();
-    triggerSheetSlideAnimation('left');
-  } else {
-    AppState.currentSession.editingBatchId = null;
-    setupInputSheet();
-    triggerSheetSlideAnimation('left');
-  }
   updateSheetPageIndicator();
   broadcastSyncState();
 }
