@@ -814,10 +814,10 @@ body.theme-tactical-dark .three-star-item-card {
   background: rgba(245, 158, 11, 0.06) !important;
 }
 
-/* 新規獲得: 赤枠 */
+/* 新規獲得: 緑枠 */
 .three-star-item-card.border-new {
-  border: 2px solid #ff3e6c !important;
-  background: rgba(255, 62, 108, 0.06) !important;
+  border: 2px solid #10b981 !important;
+  background: rgba(16, 185, 129, 0.08) !important;
 }
 
 /* 50%枠すり抜け: 緑枠 */
@@ -908,7 +908,8 @@ body.theme-tactical-dark .three-star-item-card.border-pickup .ts-card-type-text 
 }
 
 .three-star-item-card.border-new .ts-card-type-text {
-  color: #e11d48;
+  color: #059669;
+  font-weight: 800;
 }
 
 .three-star-item-card.border-fifty .ts-card-type-text {
@@ -1417,21 +1418,21 @@ body.theme-tactical-dark .schale-sheet-table th {
   background-color: rgba(0, 174, 239, 0.04);
 }
 
-/* 列幅設定 */
+/* 列幅設定 (小窓でもnewとpickが絶対に切れないよう最適化) */
 .col-num {
-  width: 38px;
+  width: 28px;
   font-weight: 700;
   color: var(--text-muted);
 }
 
 .col-total {
-  width: 65px;
+  width: 46px;
   font-family: var(--font-mono);
   font-weight: 700;
 }
 
 .col-charge {
-  width: 75px;
+  width: 58px;
   font-family: var(--font-mono);
   font-weight: 800;
   color: var(--primary);
@@ -1447,11 +1448,11 @@ body.theme-tactical-dark .schale-sheet-table th {
 
 td.col-name {
   text-align: left;
-  min-width: 160px;
+  min-width: 120px;
 }
 
 .col-chk {
-  width: 55px;
+  width: 44px;
 }
 
 /* 100連目などの特定行ハイライト (薄黄色 #fff2cc) */
@@ -1598,6 +1599,12 @@ body.theme-tactical-dark .sheet-student-input.is-pickup {
   border-color: var(--primary);
   color: #ffffff;
   box-shadow: 0 2px 6px rgba(0, 174, 239, 0.3);
+}
+
+.sheet-chk-label.chk-new input[type="checkbox"]:checked + .custom-chk-box {
+  background: #10b981;
+  border-color: #10b981;
+  box-shadow: 0 2px 6px rgba(16, 185, 129, 0.35);
 }
 
 .sheet-chk-label.chk-pick input[type="checkbox"]:checked + .custom-chk-box {

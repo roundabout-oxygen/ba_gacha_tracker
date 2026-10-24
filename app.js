@@ -1,10 +1,10 @@
 /**
  * ブルーアーカイブ リアルタイムガチャ集計 (BA Gacha Live Tracker)
- * Version: v1.0.31
+ * Version: v1.0.32
  * Core Application Logic & State Management
  */
 
-const APP_VERSION = 'v1.0.31';
+const APP_VERSION = 'v1.0.32';
 const REMOTE_STUDENT_ICONS_URL = 'https://raw.githubusercontent.com/roundabout-oxygen/ba_gacha_tabulation/main/data/student_icons.json';
 
 // 単発 (1連) モードかどうかのフラグ (false = 10連モード, true = 1連モード)
@@ -1474,9 +1474,30 @@ function renderInputSheetTable() {
     tdName.appendChild(inputWrap);
     tr.appendChild(tdName);
 
-    // 5. pick チェックボックス
+    // 5. new チェックボックス (pickの左に配置)
+    const tdNew = document.createElement('td');
+    tdNew.className = 'col-chk col-new';
+    const labelNew = document.createElement('label');
+    labelNew.className = 'sheet-chk-label chk-new';
+    const chkNew = document.createElement('input');
+    chkNew.type = 'checkbox';
+    chkNew.checked = row.isNew;
+    chkNew.dataset.rowIndex = idx;
+    chkNew.addEventListener('change', (e) => {
+      row.isNew = e.target.checked;
+      recalculateCurrentSessionCharges();
+    });
+    const boxNew = document.createElement('span');
+    boxNew.className = 'custom-chk-box';
+    boxNew.textContent = '✔';
+    labelNew.appendChild(chkNew);
+    labelNew.appendChild(boxNew);
+    tdNew.appendChild(labelNew);
+    tr.appendChild(tdNew);
+
+    // 6. pick チェックボックス
     const tdPick = document.createElement('td');
-    tdPick.className = 'col-chk';
+    tdPick.className = 'col-chk col-pick';
     const labelPick = document.createElement('label');
     labelPick.className = 'sheet-chk-label chk-pick';
     const chkPick = document.createElement('input');
@@ -1499,27 +1520,6 @@ function renderInputSheetTable() {
     labelPick.appendChild(boxPick);
     tdPick.appendChild(labelPick);
     tr.appendChild(tdPick);
-
-    // 6. 新 チェックボックス
-    const tdNew = document.createElement('td');
-    tdNew.className = 'col-chk';
-    const labelNew = document.createElement('label');
-    labelNew.className = 'sheet-chk-label';
-    const chkNew = document.createElement('input');
-    chkNew.type = 'checkbox';
-    chkNew.checked = row.isNew;
-    chkNew.dataset.rowIndex = idx;
-    chkNew.addEventListener('change', (e) => {
-      row.isNew = e.target.checked;
-      recalculateCurrentSessionCharges();
-    });
-    const boxNew = document.createElement('span');
-    boxNew.className = 'custom-chk-box';
-    boxNew.textContent = '✔';
-    labelNew.appendChild(chkNew);
-    labelNew.appendChild(boxNew);
-    tdNew.appendChild(labelNew);
-    tr.appendChild(tdNew);
 
     tbody.appendChild(tr);
   });
@@ -1974,14 +1974,14 @@ const convergenceRelativeMatrixPlugin = {
           ctx.drawImage(img, imgX, imgY, size, size);
           ctx.restore();
 
-          // 生徒アイコンの丸枠ボーダー (新規なら赤、50%すり抜けなら緑、ピックアップなら黄色)
+          // 生徒アイコンの丸枠ボーダー (新規・50%すり抜けなら緑、ピックアップなら黄色)
           let ringColor = '#c5a059';
           if (pull.isPick) {
             ringColor = '#f59e0b'; // ピックアップ: 黄色
+          } else if (pull.isNew) {
+            ringColor = '#10b981'; // 新規: 緑
           } else if (pull.isGuaranteed50) {
             ringColor = '#10b981'; // 50%すり抜け: 緑
-          } else if (pull.isNew) {
-            ringColor = '#ff3e6c'; // 新規: 赤
           }
 
           ctx.save();
@@ -2232,12 +2232,12 @@ function renderDirectoryGrid() {
     } else if (pull.isPick) {
       typeText = 'ピックアップ';
       borderClass = 'border-pickup';
+    } else if (pull.isNew) {
+      typeText = '新規';
+      borderClass = 'border-new';
     } else if (pull.isGuaranteed50) {
       typeText = 'すり抜け(50%)';
       borderClass = 'border-fifty';
-    } else if (pull.isNew) {
-      typeText = '新規獲得';
-      borderClass = 'border-new';
     } else {
       typeText = currentCount > 1 ? 'すり抜け(被り)' : 'すり抜け';
       borderClass = 'border-regular';
