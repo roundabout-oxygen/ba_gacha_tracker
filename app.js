@@ -1,10 +1,10 @@
 /**
  * ブルーアーカイブ リアルタイムガチャ集計 (BA Gacha Live Tracker)
- * Version: v1.0.30
+ * Version: v1.0.31
  * Core Application Logic & State Management
  */
 
-const APP_VERSION = 'v1.0.30';
+const APP_VERSION = 'v1.0.31';
 const REMOTE_STUDENT_ICONS_URL = 'https://raw.githubusercontent.com/roundabout-oxygen/ba_gacha_tabulation/main/data/student_icons.json';
 
 // 単発 (1連) モードかどうかのフラグ (false = 10連モード, true = 1連モード)
@@ -1231,6 +1231,7 @@ function addNewBatchImmediately() {
   renderDirectoryGrid();
   renderConvergenceChart();
   renderSheetTimelineNav();
+  broadcastSyncState();
 }
 
 /**
@@ -1269,6 +1270,7 @@ function deleteCurrentBatch() {
     triggerSheetSlideAnimation('left');
   }
   updateSheetPageIndicator();
+  broadcastSyncState();
 }
 
 /**
@@ -1734,6 +1736,8 @@ function commitCurrentSheet() {
   renderDirectoryGrid();
   renderConvergenceChart();
   renderSheetTimelineNav();
+  persistState();
+  broadcastSyncState();
 }
 
 // ==========================================================================
@@ -2518,6 +2522,7 @@ function initEventListeners() {
     btnToggleCount.addEventListener('click', () => {
       isSinglePullMode = !isSinglePullMode;
       applyPullModeUI();
+      broadcastSyncState();
     });
   }
 
