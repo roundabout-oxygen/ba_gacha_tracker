@@ -1,10 +1,10 @@
 /**
  * ブルーアーカイブ リアルタイムガチャ集計 (BA Gacha Live Tracker)
- * Version: v1.0.34
+ * Version: v1.0.35
  * Core Application Logic & State Management
  */
 
-const APP_VERSION = 'v1.0.34';
+const APP_VERSION = 'v1.0.35';
 const REMOTE_STUDENT_ICONS_URL = 'https://raw.githubusercontent.com/roundabout-oxygen/ba_gacha_tabulation/main/data/student_icons.json';
 
 // 単発 (1連) モードかどうかのフラグ (false = 10連モード, true = 1連モード)
@@ -25,6 +25,14 @@ const AppState = {
   // 生徒アイコン辞書 (Wiki正規データ + 仮登録データ)
   officialStudents: {}, // Wiki公式生徒 { "生徒名": "画像URL", ... }
   customStudents: {},   // 新規生徒仮登録 { "生徒名": { icon: "data:image/...", createdAt: "...", wikiSynced: false } }
+
+  // GitHub連携設定
+  github: {
+    token: '',
+    repoOwner: 'roundabout-oxygen',
+    repoName: 'ba_gacha_tracker',
+    filePath: 'data/custom_students.json'
+  },
 
   // 現在の入力シートセッション
   currentSession: {
@@ -91,6 +99,9 @@ document.addEventListener('DOMContentLoaded', () => {
   // 切り抜きエンジン初期化
   initCropperEngine();
 
+  // 仮登録マネージャー & GitHub共有設定の初期化
+  initCustomStudentEditor();
+
   // デフォルトでガチャシートの準備（初回10連）
   setupInputSheet(10);
 
@@ -131,10 +142,6 @@ document.addEventListener('DOMContentLoaded', () => {
     renderCustomStudentsTableIfOpen();
   });
 });
-
-function renderCustomStudentsTableIfOpen() {
-  // 必要に応じて図鑑などを更新
-}
 
 /**
  * 添付2枚目を完全再現したデモデータ投入（テスト・検証用）
@@ -220,6 +227,10 @@ function loadSavedState() {
     const savedTheme = localStorage.getItem('ba_gacha_theme');
     if (savedTheme) {
       AppState.theme = savedTheme;
+    }
+    const savedGhToken = localStorage.getItem('ba_github_token');
+    if (savedGhToken) {
+      AppState.github.token = savedGhToken;
     }
   } catch (err) {
     console.error('Failed to load state from localStorage:', err);
@@ -3309,6 +3320,351 @@ function saveCustomStudent() {
   if (modal && typeof modal.close === 'function') modal.close();
 }
 
+// ==========================================================================
+// 仮登録生徒マネージャー & GitHubプッシュ共有
+// ==========================================================================
+
+function escapeHtml(str) {
+  if (typeof str !== 'string') return '';
+  return str.replace(/[&<>"']/g, match => {
+    switch (match) {
+      case '&': return '&amp;';
+      case '<': return '&lt;';
+      case '>': return '&gt;';
+      case '"': return '&quot;';
+      case "'": return '&#39;';
+      default: return match;
+    }
+  });
+}
+
+function initCustomStudentEditor() {
+  const modal = document.getElementById('modalCustomEditor');
+  if (!modal) return;
+
+  const tokenInput = document.getElementById('githubTokenInput');
+  const btnSaveToken = document.getElementById('btnSaveGithubToken');
+  const btnPush = document.getElementById('btnPushToGithub');
+  const btnExport = document.getElementById('btnExportCustomJson');
+  const btnImport = document.getElementById('btnImportCustomJson');
+  const fileImport = document.getElementById('importCustomFileInput');
+  const btnSyncWiki = document.getElementById('btnSyncWiki');
+
+  // トークン初期表示
+  if (tokenInput && AppState.github && AppState.github.token) {
+    tokenInput.value = AppState.github.token;
+  }
+
+  // トークン保存ボタン
+  if (btnSaveToken && tokenInput) {
+    btnSaveToken.addEventListener('click', () => {
+      const val = tokenInput.value.trim();
+      AppState.github.token = val;
+      localStorage.setItem('ba_github_token', val);
+      alert('GitHub Personal Access Token を保存しました。');
+    });
+  }
+
+  // GitHubへプッシュ共有ボタン
+  if (btnPush) {
+    btnPush.addEventListener('click', pushCustomStudentsToGitHub);
+  }
+
+  // JSONエクスポートボタン
+  if (btnExport) {
+    btnExport.addEventListener('click', () => {
+      const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify({ students: AppState.customStudents }, null, 2));
+      const a = document.createElement('a');
+      a.href = dataStr;
+      a.download = `custom_students_${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    });
+  }
+
+  // JSONインポートボタン
+  if (btnImport && fileImport) {
+    btnImport.addEventListener('click', () => fileImport.click());
+    fileImport.addEventListener('change', (e) => {
+      if (e.target.files && e.target.files[0]) {
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+          try {
+            const parsed = JSON.parse(evt.target.result);
+            if (parsed && parsed.students) {
+              AppState.customStudents = Object.assign(AppState.customStudents, parsed.students);
+              persistState();
+              renderCustomStudentsTableIfOpen();
+              updateAllStats();
+              renderDirectoryGrid();
+              if (typeof renderInputSheetTable === 'function') renderInputSheetTable();
+              alert('仮登録生徒データをインポートしました！');
+            } else {
+              alert('JSON形式が正しくありません。「students」オブジェクトが必要です。');
+            }
+          } catch (err) {
+            alert('JSONの解析に失敗しました: ' + err.message);
+          }
+        };
+        reader.readAsText(e.target.files[0]);
+      }
+    });
+  }
+
+  // Wikiデータ照合＆自動クリーンアップ
+  if (btnSyncWiki) {
+    btnSyncWiki.addEventListener('click', async () => {
+      await loadStudentDictionaries();
+      cleanupSyncedCustomStudents(true);
+      updateAllStats();
+      renderDirectoryGrid();
+      renderCustomStudentsTableIfOpen();
+    });
+  }
+}
+
+/**
+ * 仮登録マネージャーのテーブル一覧を描画
+ */
+function renderCustomStudentsTableIfOpen() {
+  const tbody = document.getElementById('customStudentsTbody');
+  const empty = document.getElementById('customStudentsEmpty');
+  if (!tbody) return;
+
+  const names = Object.keys(AppState.customStudents || {});
+  tbody.innerHTML = '';
+
+  if (names.length === 0) {
+    if (empty) empty.style.display = 'block';
+    return;
+  }
+  if (empty) empty.style.display = 'none';
+
+  names.forEach(name => {
+    const data = AppState.customStudents[name];
+    if (!data) return;
+
+    const tr = document.createElement('tr');
+    const inOfficial = Boolean(AppState.officialStudents[name] || AppState.officialStudents[normalizeStudentName(name)]);
+
+    // 1. アイコン
+    const tdIcon = document.createElement('td');
+    tdIcon.style.textAlign = 'center';
+    const img = document.createElement('img');
+    img.className = 'custom-row-avatar';
+    img.src = data.icon || '';
+    img.alt = name;
+    img.style.width = '36px';
+    img.style.height = '36px';
+    img.style.borderRadius = '50%';
+    img.style.objectFit = 'cover';
+    img.style.border = '2px solid #00aeef';
+    img.style.verticalAlign = 'middle';
+    tdIcon.appendChild(img);
+    tr.appendChild(tdIcon);
+
+    // 2. 生徒名入力
+    const tdName = document.createElement('td');
+    const inputName = document.createElement('input');
+    inputName.type = 'text';
+    inputName.className = 'styled-form-input edit-name-input';
+    inputName.value = name;
+    inputName.dataset.originalName = name;
+    inputName.style.fontSize = '12px';
+    inputName.style.padding = '4px 8px';
+    inputName.style.width = '100%';
+    inputName.style.boxSizing = 'border-box';
+    tdName.appendChild(inputName);
+    tr.appendChild(tdName);
+
+    // 3. 登録日
+    const tdDate = document.createElement('td');
+    tdDate.style.fontSize = '11px';
+    tdDate.style.color = '#64748b';
+    tdDate.style.whiteSpace = 'nowrap';
+    tdDate.textContent = data.createdAt ? data.createdAt.slice(0, 10) : '-';
+    tr.appendChild(tdDate);
+
+    // 4. 状況
+    const tdStatus = document.createElement('td');
+    tdStatus.style.whiteSpace = 'nowrap';
+    const statusBadge = document.createElement('span');
+    statusBadge.className = inOfficial ? 'status-badge badge-fifty' : 'status-badge badge-regular';
+    statusBadge.style.fontSize = '10px';
+    statusBadge.textContent = inOfficial ? 'Wiki登録済 (削除推奨)' : '仮登録中';
+    tdStatus.appendChild(statusBadge);
+    tr.appendChild(tdStatus);
+
+    // 5. 操作
+    const tdAction = document.createElement('td');
+    const actWrap = document.createElement('div');
+    actWrap.style.display = 'flex';
+    actWrap.style.gap = '4px';
+    actWrap.style.justifyContent = 'center';
+
+    const btnUpdate = document.createElement('button');
+    btnUpdate.type = 'button';
+    btnUpdate.className = 'btn-cyan-sm btn-update-name';
+    btnUpdate.textContent = '更新';
+    btnUpdate.style.padding = '3px 8px';
+    btnUpdate.style.fontSize = '11px';
+    btnUpdate.dataset.originalName = name;
+
+    const btnDelete = document.createElement('button');
+    btnDelete.type = 'button';
+    btnDelete.className = 'btn-dialog-cancel btn-delete-custom';
+    btnDelete.textContent = '削除';
+    btnDelete.style.padding = '3px 8px';
+    btnDelete.style.fontSize = '11px';
+    btnDelete.style.background = '#fef2f2';
+    btnDelete.style.borderColor = '#fca5a5';
+    btnDelete.style.color = '#ef4444';
+    btnDelete.dataset.name = name;
+
+    actWrap.appendChild(btnUpdate);
+    actWrap.appendChild(btnDelete);
+    tdAction.appendChild(actWrap);
+    tr.appendChild(tdAction);
+
+    tbody.appendChild(tr);
+  });
+
+  // 生徒名更新ボタン
+  tbody.querySelectorAll('.btn-update-name').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const orig = btn.dataset.originalName;
+      const input = tbody.querySelector(`.edit-name-input[data-original-name="${orig}"]`);
+      if (input) {
+        const newName = input.value.trim();
+        if (!newName) {
+          alert('生徒名を入力してください。');
+          return;
+        }
+        if (newName !== orig) {
+          AppState.customStudents[newName] = AppState.customStudents[orig];
+          delete AppState.customStudents[orig];
+          persistState();
+          renderCustomStudentsTableIfOpen();
+          updateAllStats();
+          renderDirectoryGrid();
+          if (typeof renderInputSheetTable === 'function') renderInputSheetTable();
+          alert(`生徒名を「${newName}」に更新しました。`);
+        }
+      }
+    });
+  });
+
+  // 削除ボタン
+  tbody.querySelectorAll('.btn-delete-custom').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const name = btn.dataset.name;
+      if (confirm(`仮登録生徒「${name}」を削除しますか？`)) {
+        delete AppState.customStudents[name];
+        persistState();
+        renderCustomStudentsTableIfOpen();
+        updateAllStats();
+        renderDirectoryGrid();
+        if (typeof renderInputSheetTable === 'function') renderInputSheetTable();
+      }
+    });
+  });
+}
+
+/**
+ * GitHubプッシュ共有 (Personal Access Token API)
+ */
+async function pushCustomStudentsToGitHub() {
+  const tokenInput = document.getElementById('githubTokenInput');
+  const token = (tokenInput && tokenInput.value.trim()) || (AppState.github && AppState.github.token);
+  const statusEl = document.getElementById('githubSyncResult');
+
+  if (!token) {
+    if (statusEl) {
+      statusEl.innerHTML = '<span style="color:#ef4444; font-weight:bold;">⚠️ GitHub Personal Access Token を入力してください。</span>';
+    } else {
+      alert('GitHub Personal Access Token を入力してください。');
+    }
+    if (tokenInput) tokenInput.focus();
+    return;
+  }
+
+  // トークンを保存
+  AppState.github.token = token;
+  localStorage.setItem('ba_github_token', token);
+
+  if (statusEl) {
+    statusEl.innerHTML = '<span style="color:#00aeef; font-weight:bold;">⏳ GitHubへプッシュ中...</span>';
+  }
+
+  try {
+    const owner = AppState.github.repoOwner || 'roundabout-oxygen';
+    const repo = AppState.github.repoName || 'ba_gacha_tracker';
+    const path = AppState.github.filePath || 'data/custom_students.json';
+    const apiUrl = `https://api.github.com/repos/${owner}/${repo}/contents/${path}`;
+
+    // 既存ファイルのSHAを取得
+    let sha = '';
+    const getRes = await fetch(apiUrl, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Accept': 'application/vnd.github.v3+json'
+      }
+    });
+
+    if (getRes.ok) {
+      const fileData = await getRes.json();
+      sha = fileData.sha;
+    } else if (getRes.status === 401) {
+      throw new Error('トークンが無効または有効期限切れです (401 Unauthorized)');
+    } else if (getRes.status === 404) {
+      // ファイル未存在の場合は新規作成
+    } else {
+      throw new Error(`GitHub API エラー: ${getRes.status} ${getRes.statusText}`);
+    }
+
+    // JSONコンテンツの生成 (UTF-8 Base64)
+    const contentObj = { students: AppState.customStudents };
+    const jsonStr = JSON.stringify(contentObj, null, 2);
+    const base64Content = btoa(unescape(encodeURIComponent(jsonStr)));
+
+    const body = {
+      message: `Update custom_students.json via Web App (${APP_VERSION})`,
+      content: base64Content
+    };
+    if (sha) body.sha = sha;
+
+    const putRes = await fetch(apiUrl, {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Accept': 'application/vnd.github.v3+json',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(body)
+    });
+
+    if (putRes.ok) {
+      if (statusEl) {
+        statusEl.innerHTML = '<span style="color:#10b981; font-weight:bold;">✅ GitHubへのプッシュ共有が成功しました！</span>';
+      }
+      alert('GitHubへのプッシュ共有が完了しました！他の利用者も最新データを取得できます。');
+    } else {
+      const errData = await putRes.json().catch(() => ({}));
+      const msg = errData.message || `${putRes.status} ${putRes.statusText}`;
+      if (statusEl) {
+        statusEl.innerHTML = `<span style="color:#ef4444; font-weight:bold;">❌ プッシュ失敗: ${msg}</span>`;
+      }
+      alert(`GitHubへのプッシュに失敗しました: ${msg}`);
+    }
+  } catch (err) {
+    if (statusEl) {
+      statusEl.innerHTML = `<span style="color:#ef4444; font-weight:bold;">❌ エラー: ${err.message}</span>`;
+    }
+    alert(`エラーが発生しました: ${err.message}`);
+  }
+}
+
 // グローバルAPI公開 (デバッグ・外部連携・自動検証用)
 if (typeof window !== 'undefined') {
   window.AppState = AppState;
@@ -3333,4 +3689,7 @@ if (typeof window !== 'undefined') {
   window.drawCropper = drawCropper;
   window.getCroppedDataUrl = getCroppedDataUrl;
   window.saveCustomStudent = saveCustomStudent;
+  window.initCustomStudentEditor = initCustomStudentEditor;
+  window.renderCustomStudentsTableIfOpen = renderCustomStudentsTableIfOpen;
+  window.pushCustomStudentsToGitHub = pushCustomStudentsToGitHub;
 }
