@@ -1,10 +1,10 @@
 /**
  * ブルーアーカイブ リアルタイムガチャ集計 (BA Gacha Live Tracker)
- * Version: v1.0.33
+ * Version: v1.0.34
  * Core Application Logic & State Management
  */
 
-const APP_VERSION = 'v1.0.33';
+const APP_VERSION = 'v1.0.34';
 const REMOTE_STUDENT_ICONS_URL = 'https://raw.githubusercontent.com/roundabout-oxygen/ba_gacha_tabulation/main/data/student_icons.json';
 
 // 単発 (1連) モードかどうかのフラグ (false = 10連モード, true = 1連モード)
@@ -2986,6 +2986,7 @@ const CropperState = {
   scale: 1,
   offsetX: 0,
   offsetY: 0,
+  rotation: 0,
   isDragging: false,
   dragStartX: 0,
   dragStartY: 0
@@ -3032,8 +3033,9 @@ function initCropperEngine() {
     }
   });
 
-  // キャンバスドラッグ操作
+  // キャンバスドラッグ操作 (マウス)
   canvas.addEventListener('mousedown', (e) => {
+    if (!CropperState.img) return;
     CropperState.isDragging = true;
     CropperState.dragStartX = e.clientX - CropperState.offsetX;
     CropperState.dragStartY = e.clientY - CropperState.offsetY;
@@ -3048,7 +3050,18 @@ function initCropperEngine() {
     CropperState.isDragging = false;
   });
 
-  // ズーム操作
+  // マウスホイールでのズームイン・ズームアウト
+  canvas.addEventListener('wheel', (e) => {
+    if (!CropperState.img) return;
+    e.preventDefault();
+    const zoomDelta = e.deltaY < 0 ? 0.08 : -0.08;
+    CropperState.scale = Math.max(0.3, Math.min(4.0, CropperState.scale + zoomDelta));
+    const slider = document.getElementById('cropZoomSlider');
+    if (slider) slider.value = CropperState.scale.toFixed(2);
+    drawCropper();
+  }, { passive: false });
+
+  // ズームスライダー
   const slider = document.getElementById('cropZoomSlider');
   if (slider) {
     slider.addEventListener('input', (e) => {
@@ -3056,56 +3069,102 @@ function initCropperEngine() {
       drawCropper();
     });
   }
+
+  // 90度回転ボタン
+  const btnRotate = document.getElementById('btnCropRotate');
+  if (btnRotate) {
+    btnRotate.addEventListener('click', () => {
+      if (!CropperState.img) return;
+      CropperState.rotation = (CropperState.rotation + 90) % 360;
+      drawCropper();
+    });
+  }
+
+  // ズームイン・ズームアウト・リセットボタン
   const btnZoomIn = document.getElementById('btnCropZoomIn');
   const btnZoomOut = document.getElementById('btnCropZoomOut');
   const btnReset = document.getElementById('btnCropReset');
   if (btnZoomIn) {
     btnZoomIn.addEventListener('click', () => {
-      CropperState.scale = Math.min(3, CropperState.scale + 0.1);
-      if (slider) slider.value = CropperState.scale;
+      if (!CropperState.img) return;
+      CropperState.scale = Math.min(4.0, CropperState.scale + 0.1);
+      if (slider) slider.value = CropperState.scale.toFixed(2);
       drawCropper();
     });
   }
   if (btnZoomOut) {
     btnZoomOut.addEventListener('click', () => {
-      CropperState.scale = Math.max(0.5, CropperState.scale - 0.1);
-      if (slider) slider.value = CropperState.scale;
+      if (!CropperState.img) return;
+      CropperState.scale = Math.max(0.3, CropperState.scale - 0.1);
+      if (slider) slider.value = CropperState.scale.toFixed(2);
       drawCropper();
     });
   }
   if (btnReset) {
     btnReset.addEventListener('click', () => {
-      CropperState.scale = 1;
+      if (!CropperState.img) return;
+      CropperState.rotation = 0;
       CropperState.offsetX = 0;
       CropperState.offsetY = 0;
-      if (slider) slider.value = 1;
+      const minSide = Math.min(CropperState.img.width, CropperState.img.height);
+      CropperState.scale = Math.max(0.4, Math.min(3.0, 160 / minSide));
+      if (slider) slider.value = CropperState.scale.toFixed(2);
       drawCropper();
+    });
+  }
+
+  // 生徒名リアルタイム反映
+  const nameInput = document.getElementById('customStudentName');
+  if (nameInput) {
+    nameInput.addEventListener('input', () => {
+      updateCardPreview();
     });
   }
 
   // 保存ボタン
   const btnSaveStudent = document.getElementById('btnSaveCustomStudent');
-  const nameInput = document.getElementById('customStudentName');
-  if (btnSaveStudent && nameInput) {
-    nameInput.addEventListener('input', () => {
-      const sampleName = document.getElementById('previewCardName');
-      if (sampleName) sampleName.textContent = nameInput.value || '生徒名';
-    });
+  if (btnSaveStudent) {
     btnSaveStudent.addEventListener('click', saveCustomStudent);
+  }
+
+  // キャンセルボタン
+  const btnCancel = document.getElementById('btnCancelCustomModal');
+  if (btnCancel) {
+    btnCancel.addEventListener('click', () => {
+      const modal = document.getElementById('modalCustomStudent');
+      if (modal && typeof modal.close === 'function') modal.close();
+    });
   }
 }
 
 function loadCropperImageFile(file) {
+  if (!file || !file.type.startsWith('image/')) return;
   const reader = new FileReader();
   reader.onload = (e) => {
     const img = new Image();
     img.onload = () => {
       CropperState.img = img;
-      CropperState.scale = 1;
+      CropperState.rotation = 0;
       CropperState.offsetX = 0;
       CropperState.offsetY = 0;
+
+      // 初期倍率を枠 (140px) に程よくフィットするよう自動調整
+      const minSide = Math.min(img.width, img.height);
+      const initialScale = Math.max(0.4, Math.min(3.0, 160 / minSide));
+      CropperState.scale = initialScale;
+
+      const slider = document.getElementById('cropZoomSlider');
+      if (slider) slider.value = initialScale.toFixed(2);
+
       const tools = document.getElementById('cropperTools');
       if (tools) tools.style.display = 'flex';
+
+      const placeholder = document.getElementById('cropPlaceholder');
+      if (placeholder) placeholder.style.display = 'none';
+
+      const btnSave = document.getElementById('btnSaveCustomStudent');
+      if (btnSave) btnSave.disabled = false;
+
       drawCropper();
     };
     img.src = e.target.result;
@@ -3118,88 +3177,115 @@ function drawCropper() {
   if (!canvas || !CropperState.img) return;
   const ctx = canvas.getContext('2d');
 
-  canvas.width = canvas.clientWidth;
-  canvas.height = canvas.clientHeight;
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  canvas.width = 280;
+  canvas.height = 280;
+  ctx.clearRect(0, 0, 280, 280);
 
   const img = CropperState.img;
-  const cx = canvas.width / 2;
-  const cy = canvas.height / 2;
-  const cropSize = 140;
+  const cx = 140;
+  const cy = 140;
 
-  // 画像描画
+  // 画像描画 (回転・移動・スケールを反映)
   ctx.save();
   ctx.translate(cx + CropperState.offsetX, cy + CropperState.offsetY);
+  ctx.rotate((CropperState.rotation * Math.PI) / 180);
   ctx.scale(CropperState.scale, CropperState.scale);
   ctx.drawImage(img, -img.width / 2, -img.height / 2);
   ctx.restore();
 
-  // 暗幕オーバーレイ
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-  // 切り抜き範囲クリア
-  ctx.clearRect(cx - cropSize / 2, cy - cropSize / 2, cropSize, cropSize);
-
-  // ガイド枠線
-  ctx.strokeStyle = '#00aeef';
-  ctx.lineWidth = 2;
-  ctx.strokeRect(cx - cropSize / 2, cy - cropSize / 2, cropSize, cropSize);
-
-  // プレビュー生成
-  generateCroppedPreviews(cx, cy, cropSize);
+  // カードプレビューをリアルタイム更新
+  updateCardPreview();
 }
 
-function generateCroppedPreviews(cx, cy, cropSize) {
-  const sqCanvas = document.getElementById('previewSquareCanvas');
-  const ciCanvas = document.getElementById('previewCircleCanvas');
-  const cardImg = document.getElementById('previewCardImg');
-  if (!sqCanvas || !ciCanvas || !CropperState.img) return;
+/**
+ * 切り抜き枠 (中央 140x140) の内容を円形アイコン (160x160) として抽出する
+ */
+function getCroppedDataUrl() {
+  const canvas = document.getElementById('cropCanvas');
+  if (!canvas || !CropperState.img) return null;
 
-  const sqCtx = sqCanvas.getContext('2d');
-  const ciCtx = ciCanvas.getContext('2d');
+  const cropSize = 140;
+  const cx = 140;
+  const cy = 140;
 
-  sqCanvas.width = 120;
-  sqCanvas.height = 120;
-  ciCanvas.width = 120;
-  ciCanvas.height = 120;
+  // 出力用オフスクリーンキャンバス (160x160 高解像度)
+  const outCanvas = document.createElement('canvas');
+  outCanvas.width = 160;
+  outCanvas.height = 160;
+  const outCtx = outCanvas.getContext('2d');
 
-  const img = CropperState.img;
-  const scale = CropperState.scale;
-  const sx = (img.width / 2) - ((cx - (cx - cropSize / 2) - CropperState.offsetX) / scale);
-  const sy = (img.height / 2) - ((cy - (cy - cropSize / 2) - CropperState.offsetY) / scale);
-  const sWidth = cropSize / scale;
-  const sHeight = cropSize / scale;
+  // 円形クリップ
+  outCtx.save();
+  outCtx.beginPath();
+  outCtx.arc(80, 80, 80, 0, Math.PI * 2);
+  outCtx.closePath();
+  outCtx.clip();
 
-  // 四角形
-  sqCtx.clearRect(0, 0, 120, 120);
-  sqCtx.drawImage(img, sx, sy, sWidth, sHeight, 0, 0, 120, 120);
+  // メインキャンバスの切り抜き枠 (140x140) を 160x160 にコピー
+  outCtx.drawImage(
+    canvas,
+    cx - cropSize / 2,
+    cy - cropSize / 2,
+    cropSize,
+    cropSize,
+    0,
+    0,
+    160,
+    160
+  );
+  outCtx.restore();
 
-  // 円形
-  ciCtx.clearRect(0, 0, 120, 120);
-  ciCtx.save();
-  ciCtx.beginPath();
-  ciCtx.arc(60, 60, 60, 0, Math.PI * 2);
-  ciCtx.clip();
-  ciCtx.drawImage(img, sx, sy, sWidth, sHeight, 0, 0, 120, 120);
-  ciCtx.restore();
+  return outCanvas.toDataURL('image/png');
+}
 
-  // カードプレビュー
-  if (cardImg) {
-    cardImg.src = sqCanvas.toDataURL('image/png');
+/**
+ * 右下のカード形式プレビューをリアルタイム更新
+ */
+function updateCardPreview() {
+  const cardImg = document.getElementById('cardSampleImg');
+  const cardName = document.getElementById('cardSampleName');
+  const nameInput = document.getElementById('customStudentName');
+
+  if (cardImg && CropperState.img) {
+    const url = getCroppedDataUrl();
+    if (url) cardImg.src = url;
+  }
+
+  if (cardName) {
+    cardName.textContent = (nameInput && nameInput.value.trim()) ? nameInput.value.trim() : '生徒名';
+  }
+
+  const btnSave = document.getElementById('btnSaveCustomStudent');
+  if (btnSave) {
+    btnSave.disabled = !CropperState.img;
   }
 }
 
 function saveCustomStudent() {
   const nameInput = document.getElementById('customStudentName');
-  const sqCanvas = document.getElementById('previewSquareCanvas');
-  if (!nameInput || !nameInput.value.trim() || !sqCanvas) {
-    alert('生徒名を入力し、画像をアップロードしてください。');
+  if (!nameInput || !nameInput.value.trim()) {
+    alert('生徒名を入力してください。');
+    if (nameInput) nameInput.focus();
     return;
   }
 
-  const name = normalizeStudentName(nameInput.value.trim());
-  const iconDataUrl = sqCanvas.toDataURL('image/png');
+  if (!CropperState.img) {
+    alert('画像をアップロードしてください。');
+    return;
+  }
+
+  const rawName = nameInput.value.trim();
+  const name = typeof normalizeStudentName === 'function' ? normalizeStudentName(rawName) : rawName;
+  const iconDataUrl = getCroppedDataUrl();
+
+  if (!iconDataUrl) {
+    alert('アイコン画像の切り抜き生成に失敗しました。');
+    return;
+  }
+
+  if (!AppState.customStudents) {
+    AppState.customStudents = {};
+  }
 
   AppState.customStudents[name] = {
     icon: iconDataUrl,
@@ -3208,8 +3294,19 @@ function saveCustomStudent() {
   };
 
   persistState();
-  alert(`生徒「${name}」のアイコンを仮登録しました！ガチャ入力で利用可能です。`);
-  document.getElementById('modalCustomStudent').close();
+  if (typeof updateAllStats === 'function') updateAllStats();
+  if (typeof renderDirectoryGrid === 'function') renderDirectoryGrid();
+  if (typeof renderHistoryTable === 'function') renderHistoryTable();
+  if (typeof renderCustomStudentsTableIfOpen === 'function') renderCustomStudentsTableIfOpen();
+
+  // 現在ガチャ入力シートが開いていれば、その行の生徒アイコンも即座に再描画
+  if (typeof renderInputSheetTable === 'function') {
+    renderInputSheetTable();
+  }
+
+  alert(`生徒「${name}」のアイコンを登録しました！ガチャ入力で利用可能です。`);
+  const modal = document.getElementById('modalCustomStudent');
+  if (modal && typeof modal.close === 'function') modal.close();
 }
 
 // グローバルAPI公開 (デバッグ・外部連携・自動検証用)
@@ -3218,6 +3315,7 @@ if (typeof window !== 'undefined') {
   window.switchTab = switchTab;
   window.loadDemoGachaData = loadDemoGachaData;
   window.setupInputSheet = setupInputSheet;
+  window.renderInputSheetTable = renderInputSheetTable;
   window.updateAllStats = updateAllStats;
   window.renderDirectoryGrid = renderDirectoryGrid;
   window.renderConvergenceChart = renderConvergenceChart;
@@ -3230,4 +3328,9 @@ if (typeof window !== 'undefined') {
   window.jumpToPullBatch = jumpToPullBatch;
   window.jumpToBatchByIndex = jumpToBatchByIndex;
   window.triggerSheetSlideAnimation = triggerSheetSlideAnimation;
+  window.CropperState = CropperState;
+  window.loadCropperImageFile = loadCropperImageFile;
+  window.drawCropper = drawCropper;
+  window.getCroppedDataUrl = getCroppedDataUrl;
+  window.saveCustomStudent = saveCustomStudent;
 }
