@@ -1,10 +1,10 @@
 /**
  * ブルーアーカイブ リアルタイムガチャ集計 (BA Gacha Live Tracker)
- * Version: v1.0.35
+ * Version: v1.0.36
  * Core Application Logic & State Management
  */
 
-const APP_VERSION = 'v1.0.35';
+const APP_VERSION = 'v1.0.36';
 const REMOTE_STUDENT_ICONS_URL = 'https://raw.githubusercontent.com/roundabout-oxygen/ba_gacha_tabulation/main/data/student_icons.json';
 
 // 単発 (1連) モードかどうかのフラグ (false = 10連モード, true = 1連モード)
@@ -385,7 +385,8 @@ async function loadStudentDictionaries() {
     if (resCustom.ok) {
       const remoteCustom = await resCustom.json();
       if (remoteCustom && remoteCustom.students) {
-        AppState.customStudents = Object.assign({}, remoteCustom.students, AppState.customStudents);
+        AppState.customStudents = Object.assign({}, AppState.customStudents, remoteCustom.students);
+        persistState();
       }
     }
   } catch (e) {
