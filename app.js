@@ -4,7 +4,7 @@
  * Core Application Logic & State Management
  */
 
-const APP_VERSION = 'v1.0.39';
+const APP_VERSION = 'v1.0.40';
 
 // P2P WebRTC (PeerJS) 同期管理 (Chrome ⇄ OBSブラウザソース間のプロセス間通信)
 let peerInstance = null;
@@ -277,9 +277,12 @@ try {
 }
 
 function broadcastSyncState() {
+  // 配信画面 (overlay) は受信専用のため、自身から状態をブロードキャストしない (無限ループ防止)
+  if (document.body.classList.contains('stream-overlay-mode')) return;
+
   const syncMsg = {
     type: 'SYNC_STATE',
-    senderMode: document.body.classList.contains('stream-overlay-mode') ? 'overlay' : 'control',
+    senderMode: 'control',
     payload: {
       config: AppState.config,
       pulls: AppState.pulls,
@@ -395,53 +398,60 @@ function handleSyncMessage(data) {
   if (!data || !data.type) return;
 
   if (data.type === 'SYNC_STATE') {
+    const isOverlay = document.body.classList.contains('stream-overlay-mode');
+    // 操作側はマスターのため、万が一overlayから届いたSYNC_STATEは無視して自画面を保護
+    if (!isOverlay && data.senderMode === 'overlay') return;
+
     const payload = data.payload;
     if (!payload) return;
 
     if (payload.config) AppState.config = payload.config;
     if (payload.pulls) AppState.pulls = payload.pulls;
-    if (payload.currentSession) AppState.currentSession = payload.currentSession;
-    if (payload.isSinglePullMode !== undefined) isSinglePullMode = payload.isSinglePullMode;
+    if (isOverlay) {
+      if (payload.currentSession) AppState.currentSession = payload.currentSession;
+      if (payload.isSinglePullMode !== undefined) isSinglePullMode = payload.isSinglePullMode;
+    }
 
     recalculatePullsIndexAndCharge();
     updateAllStats();
     renderDirectoryGrid();
     renderConvergenceChart();
 
-    // 配信表示モード側（OBS）または別画面でシート・ダッシュボードを最新表示
-    if (document.body.classList.contains('stream-overlay-mode')) {
+    if (isOverlay) {
       switchTab('tabDashboard');
     } else {
-      const batches = getAllBatches();
-      if (batches.length > 0) {
-        const targetBatchId = (AppState.currentSession && AppState.currentSession.editingBatchId)
-          ? AppState.currentSession.editingBatchId
-          : batches[batches.length - 1];
-        loadBatchById(targetBatchId);
-      } else {
-        setupInputSheet();
+      // 操作側: ユーザーが入力中ならフォーカス・入力を壊さない
+      const isInputActive = document.activeElement && document.activeElement.classList.contains('sheet-student-input');
+      if (!isInputActive) {
+        const batches = getAllBatches();
+        if (batches.length > 0) {
+          const targetBatchId = (AppState.currentSession && AppState.currentSession.editingBatchId)
+            ? AppState.currentSession.editingBatchId
+            : batches[batches.length - 1];
+          loadBatchById(targetBatchId);
+        } else {
+          setupInputSheet();
+        }
+        renderSheetTimelineNav();
       }
-      renderSheetTimelineNav();
-  broadcastSyncState();;
     }
+    // ※ 無限ループ防止: handleSyncMessage 内で broadcastSyncState() を再送しない
   } else if (data.type === 'REQ_SYNC') {
-    // 配信画面起動時の同期リクエストに応答
-    broadcastSyncState();
+    // 配信画面起動時の同期リクエストに応答 (操作側のみが回答)
+    if (!document.body.classList.contains('stream-overlay-mode')) {
+      broadcastSyncState();
+    }
   }
 }
 
-// フォールバック: storage イベントでも同期
+// フォールバック: storage イベント同期 (overlay側のみ最新反映。操作側はユーザー直接操作を優先)
 window.addEventListener('storage', (e) => {
-  if (e.key && e.key.startsWith('ba_gacha_')) {
+  if (document.body.classList.contains('stream-overlay-mode') && e.key && e.key.startsWith('ba_gacha_')) {
     loadSavedState();
     recalculatePullsIndexAndCharge();
     updateAllStats();
-    const batches = getAllBatches();
-    if (batches.length > 0) {
-      loadBatchById(batches[batches.length - 1]);
-    } else {
-      setupInputSheet();
-    }
+    renderDirectoryGrid();
+    renderConvergenceChart();
   }
 });
 
