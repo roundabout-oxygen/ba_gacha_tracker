@@ -1,10 +1,10 @@
 /**
  * ブルーアーカイブ リアルタイムガチャ集計 (BA Gacha Live Tracker)
- * Version: v1.0.36
+ * Version: v1.0.41
  * Core Application Logic & State Management
  */
 
-const APP_VERSION = 'v1.0.40';
+const APP_VERSION = 'v1.0.41';
 
 // P2P WebRTC (PeerJS) 同期管理 (Chrome ⇄ OBSブラウザソース間のプロセス間通信)
 let peerInstance = null;
