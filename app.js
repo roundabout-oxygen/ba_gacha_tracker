@@ -4,7 +4,7 @@
  * Core Application Logic & State Management
  */
 
-const APP_VERSION = 'v1.0.37';
+const APP_VERSION = 'v1.0.38';
 
 // P2P WebRTC (PeerJS) 同期管理 (Chrome ⇄ OBSブラウザソース間のプロセス間通信)
 let peerInstance = null;
@@ -117,12 +117,12 @@ document.addEventListener('DOMContentLoaded', () => {
   renderDirectoryGrid();
   renderConvergenceChart();
 
-  // P2P WebRTC (PeerJS) リアルタイム同期の初期化
-  initPeerSync(isOverlayMode, urlParams.get('room'));
-
   // URLパラメータの解釈 (テスト・自動検証用 & 配信モード判定)
   const urlParams = new URLSearchParams(window.location.search);
   const isOverlayMode = urlParams.get('mode') === 'overlay' || urlParams.get('mode') === 'stream' || window.location.hash === '#overlay';
+
+  // P2P WebRTC (PeerJS) リアルタイム同期の初期化
+  initPeerSync(isOverlayMode, urlParams.get('room'));
   if (isOverlayMode) {
     document.body.classList.add('stream-overlay-mode');
     switchTab('tabDashboard');
@@ -534,15 +534,22 @@ function cleanupSyncedCustomStudents(showNotification = false) {
 function getStudentIconUrl(studentName) {
   if (!studentName) return '';
   const norm = normalizeStudentName(studentName);
+  const katakana = typeof hiraganaToKatakana === 'function' ? hiraganaToKatakana(norm) : norm;
 
   if (AppState.customStudents[norm] && AppState.customStudents[norm].icon) {
     return AppState.customStudents[norm].icon;
+  }
+  if (AppState.customStudents[katakana] && AppState.customStudents[katakana].icon) {
+    return AppState.customStudents[katakana].icon;
   }
   if (AppState.customStudents[studentName] && AppState.customStudents[studentName].icon) {
     return AppState.customStudents[studentName].icon;
   }
   if (AppState.officialStudents[norm]) {
     return AppState.officialStudents[norm];
+  }
+  if (AppState.officialStudents[katakana]) {
+    return AppState.officialStudents[katakana];
   }
   if (AppState.officialStudents[studentName]) {
     return AppState.officialStudents[studentName];
@@ -1733,7 +1740,14 @@ function commitStudentInput(rowIndex, value) {
   const row = AppState.currentSession.rows[rowIndex];
   if (!row) return;
 
-  const trimmed = (value || '').trim();
+  let trimmed = (value || '').trim();
+  // 平仮名入力で公式辞書にカタカナ完全一致が存在する場合は正式名に昇格
+  if (trimmed) {
+    const kata = hiraganaToKatakana(trimmed);
+    if (AppState.officialStudents[kata] || AppState.customStudents[kata]) {
+      trimmed = kata;
+    }
+  }
   row.studentName = trimmed;
   const inputEl = document.querySelector(`.sheet-student-input[data-row-index="${rowIndex}"]`);
   const chkPick = document.querySelector(`.col-pick input[data-row-index="${rowIndex}"]`);
@@ -1789,9 +1803,10 @@ function showStudentGuidePopup(inputEl, rowIndex) {
 }
 
 function updateStudentGuidePopup(inputEl, query, rowIndex) {
+  activePopupRowIndex = rowIndex;
   const popup = document.getElementById('studentInputGuidePopup');
   const listEl = document.getElementById('guidePopupList');
-  if (!popup || !listEl) return;
+  if (!popup || !listEl || !inputEl) return;
 
   const candidates = searchStudents(query);
   currentSuggestCandidates = candidates;
