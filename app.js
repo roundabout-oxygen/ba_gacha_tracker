@@ -4,7 +4,7 @@
  * Core Application Logic & State Management
  */
 
-const APP_VERSION = 'v1.0.38';
+const APP_VERSION = 'v1.0.39';
 
 // P2P WebRTC (PeerJS) 同期管理 (Chrome ⇄ OBSブラウザソース間のプロセス間通信)
 let peerInstance = null;
@@ -17,13 +17,19 @@ const REMOTE_STUDENT_ICONS_URL = 'https://raw.githubusercontent.com/roundabout-o
 let isSinglePullMode = false;
 
 // アプリケーション全体の状態管理
+function clampGridCols(val) {
+  const n = parseInt(val, 10);
+  return isNaN(n) ? 4 : Math.max(1, Math.min(10, n));
+}
+
 const AppState = {
   // ガチャ設定
   config: {
     rate: 0.03, // 0.03 (通常) or 0.06 (フェス)
     initCharge: 0, // 開始前の引継ぎチャージ数 (0〜199)
     pickupStudents: [], // ピックアップ対象生徒の配列
-    iconOnly: false // アイコンのみ表示させるフラグ
+    iconOnly: false, // アイコンのみ表示させるフラグ
+    gridCols: 4 // 1列あたりの表示人数 (1〜10, デフォルト4)
   },
 
   // 履歴データ（1連ごとの記録配列）
@@ -225,6 +231,11 @@ function loadSavedState() {
     const savedConfig = localStorage.getItem('ba_gacha_config');
     if (savedConfig) {
       AppState.config = Object.assign(AppState.config, JSON.parse(savedConfig));
+      if (AppState.config.gridCols) {
+        AppState.config.gridCols = clampGridCols(AppState.config.gridCols);
+      } else {
+        AppState.config.gridCols = 4;
+      }
     }
     const savedPulls = localStorage.getItem('ba_gacha_pulls');
     if (savedPulls) {
@@ -2370,6 +2381,9 @@ function renderDirectoryGrid() {
   const emptyHint = document.getElementById('threeStarEmptyHint');
   const isIconOnly = Boolean(AppState.config && AppState.config.iconOnly);
   container.classList.toggle('mode-icon-only-grid', isIconOnly);
+  const cols = Math.max(1, Math.min(10, parseInt(AppState.config && AppState.config.gridCols, 10) || 4));
+  container.style.setProperty('--three-star-cols', cols);
+  container.style.gridTemplateColumns = `repeat(${cols}, minmax(0, 1fr))`;
   
   // 時系列順 (古いものが左上、新しいものは右下に追加される昇順)
   const threeStarPulls = AppState.pulls.filter(p => p.isThreeStar);
@@ -2540,6 +2554,12 @@ function syncSettingsTabInputs() {
   const iconOnlyToggle = document.getElementById('settingsIconOnlyToggle');
   if (iconOnlyToggle) iconOnlyToggle.checked = Boolean(AppState.config.iconOnly);
 
+  const gridColsSlider = document.getElementById('settingsGridColsSlider');
+  const gridColsVal = document.getElementById('gridColsVal');
+  const curCols = Math.max(1, Math.min(10, parseInt(AppState.config && AppState.config.gridCols, 10) || 4));
+  if (gridColsSlider) gridColsSlider.value = curCols;
+  if (gridColsVal) gridColsVal.textContent = `${curCols}人`;
+
   renderSettingsPickupTags();
 }
 
@@ -2565,6 +2585,11 @@ function saveSettingsFromTab() {
   const iconOnlyToggle = document.getElementById('settingsIconOnlyToggle');
   if (iconOnlyToggle) {
     AppState.config.iconOnly = iconOnlyToggle.checked;
+  }
+
+  const gridColsSlider = document.getElementById('settingsGridColsSlider');
+  if (gridColsSlider) {
+    AppState.config.gridCols = clampGridCols(gridColsSlider.value);
   }
 
   recalculatePullsIndexAndCharge();
@@ -2782,6 +2807,25 @@ function initEventListeners() {
   if (iconOnlyToggle) {
     iconOnlyToggle.addEventListener('change', (e) => {
       AppState.config.iconOnly = e.target.checked;
+      persistState();
+      renderDirectoryGrid();
+      broadcastSyncState();
+    });
+  }
+
+  // 1列の人数・サイズ調整シークバー (即時プレビュー & 配信同期)
+  const gridColsSlider = document.getElementById('settingsGridColsSlider');
+  const gridColsVal = document.getElementById('gridColsVal');
+  if (gridColsSlider) {
+    gridColsSlider.addEventListener('input', (e) => {
+      const cols = clampGridCols(e.target.value);
+      if (gridColsVal) gridColsVal.textContent = `${cols}人`;
+      AppState.config.gridCols = cols;
+      renderDirectoryGrid();
+    });
+    gridColsSlider.addEventListener('change', (e) => {
+      const cols = clampGridCols(e.target.value);
+      AppState.config.gridCols = cols;
       persistState();
       renderDirectoryGrid();
       broadcastSyncState();

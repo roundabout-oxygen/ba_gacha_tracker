@@ -251,7 +251,7 @@
           <!-- 設定ヘッダー (タイトル & バージョン表記) -->
           <div class="settings-panel-header">
             <span class="card-head-title">⚙️ 設定</span>
-            <span class="version-badge" id="appVersionBadge">v1.0.38</span>
+            <span class="version-badge" id="appVersionBadge">v1.0.39</span>
           </div>
 
           <div class="settings-panel-body">
@@ -280,6 +280,19 @@
                   <input type="checkbox" id="settingsIconOnlyToggle" class="styled-checkbox" style="width: 16px; height: 16px; cursor: pointer;">
                   <span>アイコンのみ表示させる (生徒名・種別を非表示)</span>
                 </label>
+              </div>
+
+              <!-- 1列の表示人数・サイズ調整シークバー (1〜10人) -->
+              <div class="settings-row-item" id="settingsGridColsRow" style="margin-top: 6px; padding: 6px 10px; background: rgba(0, 174, 239, 0.05); border-radius: 6px; border: 1px solid rgba(0, 174, 239, 0.15);">
+                <div style="display: flex; justify-content: space-between; align-items: center; font-size: 12px; font-weight: 700; color: var(--text-main); margin-bottom: 4px;">
+                  <span id="gridColsLabel">1列の表示人数 (外枠/アイコンの大きさ)</span>
+                  <span id="gridColsVal" style="color: var(--primary-cyan); font-weight: 800; font-size: 13px;">4人</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <span style="font-size: 11px; color: var(--text-muted); white-space: nowrap;">1人 (大)</span>
+                  <input type="range" id="settingsGridColsSlider" min="1" max="10" step="1" value="4" style="flex: 1; accent-color: var(--primary-cyan); cursor: pointer;">
+                  <span style="font-size: 11px; color: var(--text-muted); white-space: nowrap;">10人 (小)</span>
+                </div>
               </div>
 
               <!-- ピックアップ生徒設定: 1行 (候補は上側に出る) -->

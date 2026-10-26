@@ -811,7 +811,7 @@ body.theme-tactical-dark .cyan-card {
 .three-star-grid-3cols,
 .three-star-grid-4cols {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(var(--three-star-cols, 4), minmax(0, 1fr));
   gap: 6px;
 }
 
@@ -877,8 +877,10 @@ body.theme-tactical-dark .three-star-item-card.border-regular {
 /* アイコンラッパー */
 .ts-card-avatar-wrap {
   position: relative;
-  width: 38px;
-  height: 38px;
+  width: clamp(32px, 7vw, 64px);
+  height: clamp(32px, 7vw, 64px);
+  max-width: 90%;
+  aspect-ratio: 1 / 1;
   margin-bottom: 3px;
 }
 
@@ -3157,16 +3159,18 @@ body.stream-overlay-mode .chart-container-card {
 /* アイコンのみ表示モード (生徒名・種別を非表示にしてアイコン単体表示) */
 /* ========================================================================= */
 .three-star-grid-4cols.mode-icon-only-grid {
-  grid-template-columns: repeat(auto-fill, minmax(56px, 1fr)) !important;
-  gap: 5px !important;
+  grid-template-columns: repeat(var(--three-star-cols, 4), minmax(0, 1fr)) !important;
+  gap: 6px !important;
 }
 
 .three-star-item-card.mode-icon-only {
-  padding: 4px !important;
+  padding: 3px !important;
   justify-content: center !important;
-  min-height: 56px !important;
+  align-items: center !important;
   aspect-ratio: 1 / 1 !important;
   box-sizing: border-box !important;
+  width: 100% !important;
+  overflow: hidden !important;
 }
 
 .three-star-item-card.mode-icon-only .ts-card-name,
@@ -3175,7 +3179,31 @@ body.stream-overlay-mode .chart-container-card {
 }
 
 .three-star-item-card.mode-icon-only .ts-card-avatar-wrap {
-  width: 44px !important;
-  height: 44px !important;
+  width: 100% !important;
+  height: 100% !important;
   margin-bottom: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  position: relative !important;
+}
+
+.three-star-item-card.mode-icon-only .ts-card-avatar {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  border-radius: 5px !important;
+  display: block !important;
+}
+
+.three-star-item-card.mode-icon-only .ts-card-count-badge {
+  position: absolute !important;
+  top: 2px !important;
+  right: 2px !important;
+  font-size: 10px !important;
+  padding: 1px 4px !important;
+  border-radius: 4px !important;
+  background: rgba(0, 0, 0, 0.75) !important;
+  color: #fff !important;
+  z-index: 2 !important;
 }

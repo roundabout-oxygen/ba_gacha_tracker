@@ -1,6 +1,6 @@
 # ブルーアーカイブ リアルタイムガチャ集計 (BA Gacha Live Tracker) 引継ぎサマリー
 
-**文書バージョン**: v1.0.38  
+**文書バージョン**: v1.0.39  
 **作成日**: 2026-10-04  
 **GitHub リポジトリ**: [https://github.com/roundabout-oxygen/ba_gacha_tracker](https://github.com/roundabout-oxygen/ba_gacha_tracker)  
 **公開 Web アプリ**: [https://roundabout-oxygen.github.io/ba_gacha_tracker/](https://roundabout-oxygen.github.io/ba_gacha_tracker/)  
