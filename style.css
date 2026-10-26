@@ -286,12 +286,44 @@ body {
 /* 主役: 累計 ＆ ☆3確率 (大きく表示) */
 .cstat-num-large {
   font-family: var(--font-mono);
-  font-size: 28px;
+  font-size: clamp(17px, 3.8vw, 26px);
   font-weight: 900;
   line-height: 1;
   color: var(--text-main);
   white-space: nowrap;
   letter-spacing: -0.5px;
+  max-width: 100%;
+}
+
+.cstat-cell-primary {
+  min-width: 0 !important;
+  overflow: hidden !important;
+}
+
+.cstat-val-row {
+  min-width: 0 !important;
+}
+
+/* 画面幅が狭いときに文字が重ならないよう自動で縦配置に切り替え */
+@media (max-width: 540px) {
+  .cstat-cell-primary {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    justify-content: center !important;
+    padding: 3px 6px !important;
+    gap: 1px !important;
+  }
+  .cstat-cell-primary .cstat-lbl {
+    margin-top: 0 !important;
+    font-size: 10px !important;
+  }
+  .cstat-cell-primary .cstat-val-row {
+    margin-left: 0 !important;
+    align-self: flex-start !important;
+  }
+  .cstat-cell {
+    padding: 3px 6px !important;
+  }
 }
 
 .cstat-unit {
@@ -1248,11 +1280,21 @@ body.theme-tactical-dark .student-card-item {
   color: #ffffff;
 }
 
+.history-section-card {
+  display: flex !important;
+  flex-direction: column !important;
+  height: calc(100vh - 195px) !important;
+  min-height: 480px !important;
+  box-sizing: border-box !important;
+}
+
 .history-table-scrollbox {
-  max-height: 280px;
-  overflow-y: auto;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  flex: 1 !important;
+  max-height: none !important;
+  height: 100% !important;
+  overflow-y: auto !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius-sm) !important;
 }
 
 .schale-table {
@@ -1623,11 +1665,31 @@ body.theme-tactical-dark .sheet-student-input.is-pickup {
 }
 
 /* 1行目: ◁ 前ページ | 1連に切替 | 次ページ ▷ */
-.sheet-action-row-top {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 6px;
-  align-items: center;
+.sheet-action-row-top,
+.sheet-action-row-bottom {
+  display: grid !important;
+  grid-template-columns: 1fr 1fr 1fr !important;
+  gap: 6px !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+.sheet-action-row-top button,
+.sheet-action-row-bottom button {
+  width: 100% !important;
+  min-width: 0 !important;
+  height: 38px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 0 4px !important;
+  font-size: 12px !important;
+  font-weight: 800 !important;
+  box-sizing: border-box !important;
+  border-radius: var(--radius-sm) !important;
+  margin: 0 !important;
+  white-space: nowrap !important;
+  letter-spacing: 0.3px;
 }
 
 /* ========================================================================= */
@@ -1917,6 +1979,13 @@ body.theme-tactical-dark .btn-primary-action {
   animation: buttonShake 0.35s ease-in-out !important;
   background: #f59e0b !important;
   box-shadow: 0 0 10px rgba(245, 158, 11, 0.5) !important;
+}
+
+.input-shake {
+  animation: buttonShake 0.4s ease-in-out !important;
+  border-color: #ef4444 !important;
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.6) !important;
+  background-color: #fef2f2 !important;
 }
 
 /* 行部分の横スライドアニメーション */
@@ -3082,4 +3151,31 @@ body.stream-overlay-mode .chart-container-card {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12) !important;
   border-radius: 10px !important;
   padding: 10px 14px !important;
+}
+
+/* ========================================================================= */
+/* アイコンのみ表示モード (生徒名・種別を非表示にしてアイコン単体表示) */
+/* ========================================================================= */
+.three-star-grid-4cols.mode-icon-only-grid {
+  grid-template-columns: repeat(auto-fill, minmax(56px, 1fr)) !important;
+  gap: 5px !important;
+}
+
+.three-star-item-card.mode-icon-only {
+  padding: 4px !important;
+  justify-content: center !important;
+  min-height: 56px !important;
+  aspect-ratio: 1 / 1 !important;
+  box-sizing: border-box !important;
+}
+
+.three-star-item-card.mode-icon-only .ts-card-name,
+.three-star-item-card.mode-icon-only .ts-card-type-text {
+  display: none !important;
+}
+
+.three-star-item-card.mode-icon-only .ts-card-avatar-wrap {
+  width: 44px !important;
+  height: 44px !important;
+  margin-bottom: 0 !important;
 }

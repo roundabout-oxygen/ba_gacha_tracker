@@ -4,7 +4,13 @@
  * Core Application Logic & State Management
  */
 
-const APP_VERSION = 'v1.0.36';
+const APP_VERSION = 'v1.0.37';
+
+// P2P WebRTC (PeerJS) 同期管理 (Chrome ⇄ OBSブラウザソース間のプロセス間通信)
+let peerInstance = null;
+let activePeerConnections = [];
+let syncRoomId = localStorage.getItem('ba_gacha_room_id') || Math.random().toString(36).substring(2, 8);
+localStorage.setItem('ba_gacha_room_id', syncRoomId);
 const REMOTE_STUDENT_ICONS_URL = 'https://raw.githubusercontent.com/roundabout-oxygen/ba_gacha_tabulation/main/data/student_icons.json';
 
 // 単発 (1連) モードかどうかのフラグ (false = 10連モード, true = 1連モード)
@@ -16,7 +22,8 @@ const AppState = {
   config: {
     rate: 0.03, // 0.03 (通常) or 0.06 (フェス)
     initCharge: 0, // 開始前の引継ぎチャージ数 (0〜199)
-    pickupStudents: [] // ピックアップ対象生徒の配列
+    pickupStudents: [], // ピックアップ対象生徒の配列
+    iconOnly: false // アイコンのみ表示させるフラグ
   },
 
   // 履歴データ（1連ごとの記録配列）
@@ -109,6 +116,9 @@ document.addEventListener('DOMContentLoaded', () => {
   updateAllStats();
   renderDirectoryGrid();
   renderConvergenceChart();
+
+  // P2P WebRTC (PeerJS) リアルタイム同期の初期化
+  initPeerSync(isOverlayMode, urlParams.get('room'));
 
   // URLパラメータの解釈 (テスト・自動検証用 & 配信モード判定)
   const urlParams = new URLSearchParams(window.location.search);
@@ -256,20 +266,117 @@ try {
 }
 
 function broadcastSyncState() {
-  if (!syncChannel) return;
-  try {
-    syncChannel.postMessage({
-      type: 'SYNC_STATE',
-      senderMode: document.body.classList.contains('stream-overlay-mode') ? 'overlay' : 'control',
-      payload: {
-        config: AppState.config,
-        pulls: AppState.pulls,
-        currentSession: AppState.currentSession,
-        isSinglePullMode: isSinglePullMode
+  const syncMsg = {
+    type: 'SYNC_STATE',
+    senderMode: document.body.classList.contains('stream-overlay-mode') ? 'overlay' : 'control',
+    payload: {
+      config: AppState.config,
+      pulls: AppState.pulls,
+      currentSession: AppState.currentSession,
+      isSinglePullMode: isSinglePullMode
+    }
+  };
+
+  // 1. BroadcastChannel (同一ブラウザ/CEF用)
+  if (syncChannel) {
+    try {
+      syncChannel.postMessage(syncMsg);
+    } catch (e) {
+      console.warn('broadcastSyncState failed:', e);
+    }
+  }
+
+  // 2. PeerJS WebRTC (別プロセス/OBSブラウザソース用)
+  activePeerConnections.forEach(conn => {
+    try {
+      if (conn && conn.open) {
+        conn.send(syncMsg);
       }
-    });
+    } catch (e) {
+      console.warn('PeerJS send failed:', e);
+    }
+  });
+}
+
+function updateObsSyncBadge() {
+  const badge = document.getElementById('obsSyncBadge');
+  if (!badge) return;
+  const count = activePeerConnections.filter(c => c && c.open).length;
+  if (count > 0) {
+    badge.className = 'status-badge badge-pickup';
+    badge.textContent = `OBS接続中 (${count}台)`;
+  } else {
+    badge.className = 'status-badge badge-regular';
+    badge.textContent = '同期準備完了';
+  }
+}
+
+function initPeerSync(isOverlayMode, targetRoomId) {
+  if (typeof Peer === 'undefined') {
+    console.warn('PeerJS not loaded, relying only on BroadcastChannel.');
+    return;
+  }
+
+  try {
+    if (isOverlayMode) {
+      // 配信（OBS）側: クライアントとして操作側に接続
+      const room = targetRoomId || syncRoomId;
+      peerInstance = new Peer();
+      peerInstance.on('open', () => {
+        console.log('[PeerJS] Overlay connected with ID:', peerInstance.id);
+        const conn = peerInstance.connect('ba_tracker_' + room);
+        conn.on('open', () => {
+          console.log('[PeerJS] Connected to control host:', 'ba_tracker_' + room);
+          conn.send({ type: 'REQ_SYNC' });
+        });
+        conn.on('data', (data) => {
+          handleSyncMessage(data);
+        });
+        conn.on('error', (err) => console.warn('[PeerJS] Connection error:', err));
+      });
+      peerInstance.on('error', (err) => console.warn('[PeerJS] Peer error:', err));
+    } else {
+      // 操作側: ホストとして待受
+      const hostId = 'ba_tracker_' + syncRoomId;
+      peerInstance = new Peer(hostId);
+      peerInstance.on('open', (id) => {
+        console.log('[PeerJS] Host listening on ID:', id);
+        updateObsSyncBadge();
+      });
+      peerInstance.on('connection', (conn) => {
+        activePeerConnections.push(conn);
+        conn.on('open', () => {
+          updateObsSyncBadge();
+          // 即座に最新状態を同期
+          conn.send({
+            type: 'SYNC_STATE',
+            senderMode: 'control',
+            payload: {
+              config: AppState.config,
+              pulls: AppState.pulls,
+              currentSession: AppState.currentSession,
+              isSinglePullMode: isSinglePullMode
+            }
+          });
+        });
+        conn.on('data', (data) => {
+          handleSyncMessage(data);
+        });
+        conn.on('close', () => {
+          activePeerConnections = activePeerConnections.filter(c => c !== conn);
+          updateObsSyncBadge();
+        });
+        conn.on('error', () => {
+          activePeerConnections = activePeerConnections.filter(c => c !== conn);
+          updateObsSyncBadge();
+        });
+      });
+      peerInstance.on('error', (err) => {
+        console.warn('[PeerJS] Host peer error (falling back to BroadcastChannel):', err);
+      });
+    }
   } catch (e) {
-    console.warn('broadcastSyncState failed:', e);
+    console.warn('[PeerJS] Init error:', e);
   }
 }
 
@@ -304,6 +411,7 @@ function handleSyncMessage(data) {
         setupInputSheet();
       }
       renderSheetTimelineNav();
+  broadcastSyncState();;
     }
   } else if (data.type === 'REQ_SYNC') {
     // 配信画面起動時の同期リクエストに応答
@@ -350,17 +458,7 @@ function applyTheme(themeName) {
     document.body.classList.remove('theme-tactical-dark');
     document.body.classList.add('theme-cyan-light');
   }
-  const btnCyan = document.getElementById('btnThemeCyan');
-  const btnDark = document.getElementById('btnThemeDark');
-  if (btnCyan && btnDark) {
-    if (themeName === 'theme-tactical-dark') {
-      btnDark.classList.add('active');
-      btnCyan.classList.remove('active');
-    } else {
-      btnCyan.classList.add('active');
-      btnDark.classList.remove('active');
-    }
-  }
+
 }
 
 // ==========================================================================
@@ -588,7 +686,7 @@ function recalculatePullsIndexAndCharge() {
 /**
  * 現在のシート入力内容を AppState.pulls に同期し、全履歴の整合性を再計算
  */
-function syncCurrentSessionToPulls() {
+function syncCurrentSessionToPulls(forceCommitNew = false) {
   const session = AppState.currentSession;
   if (!session || !session.rows || session.rows.length === 0) return;
 
@@ -626,9 +724,9 @@ function syncCurrentSessionToPulls() {
       AppState.pulls.splice(firstIdx, originalCount, ...updatedPulls);
     }
   } else {
-    // まだバッチIDがない新規シートの場合、生徒名・pick・newに入力があったら正式追加
+    // まだバッチIDがない新規シートの場合、生徒名・pick・newに入力があるか、または確定指定(forceCommitNew)なら正式追加
     const hasAnyContent = targetRows.some(r => (r.studentName && r.studentName.trim()) || r.isPick || r.isNew);
-    if (hasAnyContent) {
+    if (hasAnyContent || forceCommitNew) {
       const batchId = 'batch_' + Date.now();
       session.editingBatchId = batchId;
       targetRows.forEach(r => {
@@ -1188,7 +1286,48 @@ function loadPreviousBatch() {
  * ユーザー要望: 「真ん中の画面では40連まで表示されているのに上の集計では累計30連になっている。
  * 10連追加を押した時点で10連引いた状態にしてください」
  */
+function checkMissing100ThPull() {
+  // 現在シート内の100連目チェック
+  const session = AppState.currentSession;
+  if (session && session.rows && session.rows.length > 0) {
+    const row100 = session.rows.find(r => r.charge === 100);
+    if (row100 && (!row100.studentName || !row100.studentName.trim())) {
+      const inputEl = document.querySelector(`.sheet-student-input[data-row-index="${row100.seq - 1}"]`);
+      if (inputEl) {
+        inputEl.classList.remove('input-shake');
+        void inputEl.offsetWidth;
+        inputEl.classList.add('input-shake');
+        inputEl.focus();
+        setTimeout(() => inputEl.classList.remove('input-shake'), 600);
+      }
+      return false;
+    }
+  }
+
+  // 確定済み履歴の中の未入力100連目チェック
+  const unentered100 = AppState.pulls.find(p => p.charge === 100 && (!p.studentName || !p.studentName.trim()));
+  if (unentered100 && unentered100.batchId) {
+    loadBatchById(unentered100.batchId);
+    setTimeout(() => {
+      const inputEl = document.querySelector(`.sheet-student-input[data-row-index="${unentered100.seqInBatch - 1}"]`);
+      if (inputEl) {
+        inputEl.classList.remove('input-shake');
+        void inputEl.offsetWidth;
+        inputEl.classList.add('input-shake');
+        inputEl.focus();
+        setTimeout(() => inputEl.classList.remove('input-shake'), 600);
+      }
+    }, 50);
+    return false;
+  }
+
+  return true;
+}
+
 function addNewBatchImmediately() {
+  if (!checkMissing100ThPull()) {
+    return;
+  }
   // 現在シートに入力中の内容があればまずコミット保存
   const rows = AppState.currentSession.rows || [];
   const hasInput = rows.some(r => (r.studentName && r.studentName.trim()) || r.isPick);
@@ -1355,9 +1494,13 @@ function applyPullModeUI() {
   if (btnNext) {
     btnNext.textContent = '次ページ ▷';
   }
+  const btnSubmitOk = document.getElementById('btnSheetSubmitOk');
+  if (btnSubmitOk) {
+    btnSubmitOk.textContent = '確定';
+  }
 
   if (btnDelete) {
-    btnDelete.textContent = isSinglePullMode ? 'この1連を削除' : 'この10連を削除';
+    btnDelete.textContent = isSinglePullMode ? '1連削除' : '10連削除';
     if (batches.length === 0 && !currentEditingId) {
       btnDelete.disabled = true;
     } else {
@@ -1497,16 +1640,21 @@ function renderInputSheetTable() {
       updateRowAvatar(row.studentName);
     }
 
-    // 入力イベント
+    // 入力イベント (平仮名等のタイピング中はサジェスト絞り込みのみ行い、確定・配信同期は行わない)
     inputName.addEventListener('input', (e) => {
-      onStudentInputChange(idx, e.target.value);
-      updateRowAvatar(e.target.value);
+      onStudentInputTyping(idx, e.target.value);
     });
     inputName.addEventListener('focus', (e) => {
       showStudentGuidePopup(inputName, idx);
     });
     inputName.addEventListener('blur', (e) => {
+      // カーソルを他に移した時に初めて正式確定・集計・配信同期を実行
+      commitStudentInput(idx, e.target.value);
       updateRowAvatar(e.target.value);
+      setTimeout(() => {
+        const popup = document.getElementById('studentInputGuidePopup');
+        if (popup) popup.style.display = 'none';
+      }, 150);
     });
     inputName.addEventListener('keydown', (e) => {
       handleSuggestKeyNavigation(e, idx);
@@ -1571,22 +1719,35 @@ function renderInputSheetTable() {
 }
 
 /**
- * 生徒名の手入力・サジェスト変更時の処理
+ * 入力中の処理: 平仮名等のタイピング中はサジェスト候補の更新のみ行い、配信や集計には反映しない
  */
-function onStudentInputChange(rowIndex, value) {
+function onStudentInputTyping(rowIndex, query) {
+  const inputEl = document.querySelector(`.sheet-student-input[data-row-index="${rowIndex}"]`);
+  updateStudentGuidePopup(inputEl, query, rowIndex);
+}
+
+/**
+ * 生徒名確定時の処理: リストから選択した時、またはカーソルを他に移した時に正式反映
+ */
+function commitStudentInput(rowIndex, value) {
   const row = AppState.currentSession.rows[rowIndex];
   if (!row) return;
 
-  row.studentName = value;
+  const trimmed = (value || '').trim();
+  row.studentName = trimmed;
   const inputEl = document.querySelector(`.sheet-student-input[data-row-index="${rowIndex}"]`);
-  const chkPick = document.querySelector(`.col-chk input[data-row-index="${rowIndex}"]`);
+  const chkPick = document.querySelector(`.col-pick input[data-row-index="${rowIndex}"]`);
+  const chkNew = document.querySelector(`.col-new input[data-row-index="${rowIndex}"]`);
 
-  if (value.trim()) {
-    if (inputEl) inputEl.classList.add('has-value');
+  if (trimmed) {
+    if (inputEl) {
+      inputEl.value = trimmed;
+      inputEl.classList.add('has-value');
+    }
 
     // ピックアップ生徒と一致するか判定
     const isPickMatch = AppState.config.pickupStudents.some(pu =>
-      normalizeStudentName(pu) === normalizeStudentName(value)
+      normalizeStudentName(pu) === normalizeStudentName(trimmed)
     );
     row.isPick = isPickMatch;
     if (chkPick) chkPick.checked = isPickMatch;
@@ -1595,25 +1756,24 @@ function onStudentInputChange(rowIndex, value) {
       if (isPickMatch) inputEl.classList.add('is-pickup');
       else inputEl.classList.remove('is-pickup');
     }
-
   } else {
     if (inputEl) {
+      inputEl.value = '';
       inputEl.classList.remove('has-value');
       inputEl.classList.remove('is-pickup');
     }
     row.isPick = false;
     row.isNew = false;
     if (chkPick) chkPick.checked = false;
-    const chkNew = document.querySelectorAll(`.col-chk input[data-row-index="${rowIndex}"]`)[1];
     if (chkNew) chkNew.checked = false;
   }
 
-  // チャージ数の再計算および集計即時反映！
+  // リスト選択またはフォーカス移動で確定された時のみ、集計・チャージ・配信側へ同期反映！
   recalculateCurrentSessionCharges();
-
-  // サジェストリスト更新
-  updateStudentGuidePopup(inputEl, value, rowIndex);
 }
+
+// 互換用エイリアス
+const onStudentInputChange = commitStudentInput;
 
 // ==========================================================================
 // 生徒名サジェストポップアップ (前方一致・平仮名カタカナ)
@@ -1698,7 +1858,8 @@ function selectSuggestStudent(rowIndex, name) {
   if (inputEl) {
     inputEl.value = name;
   }
-  onStudentInputChange(rowIndex, name);
+  // リストにある生徒を選択した瞬間に正式確定＆配信側へ同期！
+  commitStudentInput(rowIndex, name);
 
   // 左側の生徒アイコンを即時更新！
   const avatarSlot = document.getElementById(`avatarSlot_${rowIndex}`);
@@ -1721,6 +1882,7 @@ function selectSuggestStudent(rowIndex, name) {
 function handleSuggestKeyNavigation(e, rowIndex) {
   const popup = document.getElementById('studentInputGuidePopup');
   if (!popup || popup.style.display === 'none') return;
+  if (e.isComposing || e.keyCode === 229) return;
 
   if (e.key === 'ArrowDown') {
     e.preventDefault();
@@ -1736,8 +1898,12 @@ function handleSuggestKeyNavigation(e, rowIndex) {
     }
   } else if (e.key === 'Enter') {
     e.preventDefault();
-    if (currentSuggestCandidates[highlightedSuggestIndex]) {
+    if (currentSuggestCandidates && currentSuggestCandidates[highlightedSuggestIndex]) {
       selectSuggestStudent(rowIndex, currentSuggestCandidates[highlightedSuggestIndex]);
+    } else {
+      const inputEl = document.querySelector(`.sheet-student-input[data-row-index="${rowIndex}"]`);
+      if (inputEl) commitStudentInput(rowIndex, inputEl.value);
+      if (popup) popup.style.display = 'none';
     }
   } else if (e.key === 'Escape') {
     popup.style.display = 'none';
@@ -1771,8 +1937,8 @@ document.addEventListener('click', (e) => {
 // シート確定・コミット処理
 // ==========================================================================
 
-function commitCurrentSheet() {
-  syncCurrentSessionToPulls();
+function commitCurrentSheet(forceCommitNew = false) {
+  syncCurrentSessionToPulls(forceCommitNew);
   updateAllStats();
   renderHistoryTable();
   renderDirectoryGrid();
@@ -1810,8 +1976,8 @@ function updateAllStats() {
   const pickupRate = effectiveTotalPulls > 0 ? (normalPickupCount / effectiveTotalPulls) * 100 : 0;
   const expectedPickup = effectiveTotalPulls * 0.007;
 
-  // 50%勝率集計 (charge === 100 のときの勝敗: pickなら勝ち、すり抜けなら負け)
-  const fiftyPulls = pulls.filter(p => Number(p.charge) === 100);
+  // 50%勝率集計 (charge === 100 かつ入力済み行のみ対象: pickなら勝ち、すり抜けなら負け)
+  const fiftyPulls = pulls.filter(p => Number(p.charge) === 100 && Boolean(p.studentName && p.studentName.trim()));
   const fiftyWins = fiftyPulls.filter(p => p.isPick).length;
   const fiftyLosses = fiftyPulls.length - fiftyWins;
   const fiftyWinRate = fiftyPulls.length > 0 ? (fiftyWins / fiftyPulls.length) * 100 : 0;
@@ -1831,17 +1997,10 @@ function updateAllStats() {
 
   // 1. トップ簡易集計バー反映
   setText('liveStatTotalPulls', totalPulls);
-  setText('liveStatPyroxene', pyroxene.toLocaleString());
   setText('liveStatThreeStarRate', threeStarRate.toFixed(2));
-  setText('liveStatThreeStarCount', effectiveThreeStarCount);
-  setText('liveStatThreeStarDiff', (diffCount >= 0 ? '+' : '') + diffCount.toFixed(1));
   setText('liveStatPickupRate', pickupRate.toFixed(2));
-  setText('liveStatPickupCount', normalPickupCount);
-  setText('liveStatPickupExpected', expectedPickup.toFixed(1));
-  setText('liveStatWinRate', fiftyWinRate.toFixed(1));
   setText('liveStatWinCount', fiftyWins);
   setText('liveStatLossCount', fiftyLosses);
-  setText('liveStatFiftyTotal', fiftyPulls.length);
 
   const chargeTextEl = document.getElementById('liveStatChargeText');
   if (chargeTextEl) {
@@ -1867,59 +2026,6 @@ function updateAllStats() {
   if (chargeSubEl) {
     chargeSubEl.textContent = `あと ${remainingToTarget}連`;
   }
-
-  // 2. ダッシュボードカード反映
-  setText('dashTotalPulls', totalPulls);
-  setText('dashTotalPyroxene', pyroxene.toLocaleString());
-  const tenPulls = pulls.filter(p => p.pullType === '10').length / 10;
-  setText('dashTenPullsCount', Math.floor(tenPulls));
-  setText('dashSinglePullsCount', pulls.filter(p => p.pullType === '1').length);
-
-  setText('dashThreeStarRate', threeStarRate.toFixed(2));
-  setText('dashThreeStarCount', effectiveThreeStarCount);
-  setText('dashThreeStarDiffVal', (diffCount >= 0 ? '+' : '') + diffCount.toFixed(1));
-
-  const luckEvaluation = diffCount > 1.5 ? '大勝利！' : diffCount < -1.5 ? '下振れ中' : '期待値通り';
-  setText('dashLuckEvaluation', luckEvaluation);
-
-  setText('dashPickupRate', pickupRate.toFixed(2));
-  setText('dashPickupCount', normalPickupCount);
-  setText('dashPickupExpected', expectedPickup.toFixed(1));
-  setText('dashNaturalPickupCount', normalPickupCount);
-  setText('dashCeilingPickupCount', pulls.filter(p => p.isPick && (Number(p.charge) === 100 || Number(p.charge) === 200)).length);
-
-  setText('dashWinRate', fiftyWinRate.toFixed(1));
-  setText('dashWinsCount', fiftyWins);
-  setText('dashLossesCount', fiftyLosses);
-  setText('dashFiftyTotalCount', fiftyPulls.length);
-
-  // 分析サマリー
-  let maxStreak = 0;
-  let curStreak = 0;
-  pulls.forEach(p => {
-    if (p.isThreeStar) {
-      curStreak = 0;
-    } else {
-      curStreak++;
-      if (curStreak > maxStreak) maxStreak = curStreak;
-    }
-  });
-  setText('dashMaxStreak', maxStreak);
-  setText('dashCurrentStreak', curStreak);
-
-  const ceilingCount = pulls.filter(p => p.charge === 200).length;
-  setText('dashCeilingCount', ceilingCount);
-  const ceilingRate = totalPulls >= 200 ? ((ceilingCount * 200 / totalPulls) * 100).toFixed(1) : '0.0';
-  setText('dashCeilingRate', ceilingRate);
-
-  setText('dashCurrentChargeVal', `${activeCharge} `);
-  setText('dashChargeRemainingText', `あと ${remainingToTarget}連`);
-
-  // バッジ更新
-  const rateBadge = document.getElementById('dashThreeStarBadge');
-  if (rateBadge) rateBadge.textContent = AppState.config.rate === 0.06 ? '6% フェス' : '3% 通常';
-  const targetPercent = document.getElementById('chartTargetPercent');
-  if (targetPercent) targetPercent.textContent = (AppState.config.rate * 100).toFixed(1);
 }
 
 function setText(id, text) {
@@ -2021,9 +2127,9 @@ const convergenceRelativeMatrixPlugin = {
           if (pull.isPick) {
             ringColor = '#f59e0b'; // ピックアップ: 黄色
           } else if (pull.isNew) {
-            ringColor = '#10b981'; // 新規: 緑
+            ringColor = '#ff3e6c'; // 新規: 赤色 (設計書準拠)
           } else if (pull.isGuaranteed50) {
-            ringColor = '#10b981'; // 50%すり抜け: 緑
+            ringColor = '#10b981'; // 50%すり抜け: 緑色
           }
 
           ctx.save();
@@ -2127,7 +2233,19 @@ function renderConvergenceChart() {
   const yLimit = Math.max(120, Math.ceil((maxAbsDev * 1.15) / 50) * 50);
 
   if (AppState.chartInstance) {
-    AppState.chartInstance.destroy();
+    // 既存インスタンスを再利用して差分更新 (入力時のチラつきと破棄オーバーヘッドを解消)
+    AppState.chartInstance.data.datasets[0].data = baselinePoints;
+    AppState.chartInstance.data.datasets[1].data = uniquePoints;
+    AppState.chartInstance.data.datasets[1].label = isFest ? '6% 乖離率' : '3% 乖離率';
+    AppState.chartInstance.data.datasets[1].borderColor = lineColor;
+    AppState.chartInstance.data.datasets[1].backgroundColor = isFest ? 'rgba(255, 62, 108, 0.06)' : 'rgba(0, 174, 239, 0.06)';
+    AppState.chartInstance.data.datasets[1].pointBackgroundColor = lineColor;
+    AppState.chartInstance.options.scales.x.max = maxPulls;
+    AppState.chartInstance.options.scales.x.ticks.stepSize = maxPulls <= 100 ? 20 : 50;
+    AppState.chartInstance.options.scales.y.min = -yLimit;
+    AppState.chartInstance.options.scales.y.max = yLimit;
+    AppState.chartInstance.update('none');
+    return;
   }
 
   const isDark = document.body.classList.contains('theme-tactical-dark');
@@ -2231,16 +2349,16 @@ function renderConvergenceChart() {
 // ==========================================================================
 
 function renderDirectoryGrid() {
-  const container = document.getElementById('threeStarCardsGrid') || document.getElementById('dashStudentsGrid');
+  const container = document.getElementById('threeStarCardsGrid');
   if (!container) return;
 
-  const emptyHint = document.getElementById('threeStarEmptyHint') || document.getElementById('dashStudentsEmpty');
-  const countEl = document.getElementById('dashStudentsTotalCount');
-
+  const emptyHint = document.getElementById('threeStarEmptyHint');
+  const isIconOnly = Boolean(AppState.config && AppState.config.iconOnly);
+  container.classList.toggle('mode-icon-only-grid', isIconOnly);
+  
   // 時系列順 (古いものが左上、新しいものは右下に追加される昇順)
   const threeStarPulls = AppState.pulls.filter(p => p.isThreeStar);
-  if (countEl) countEl.textContent = threeStarPulls.length;
-
+  
   if (threeStarPulls.length === 0) {
     if (emptyHint) emptyHint.style.display = 'block';
     container.innerHTML = '';
@@ -2286,6 +2404,9 @@ function renderDirectoryGrid() {
     }
 
     card.classList.add(borderClass);
+    if (isIconOnly) {
+      card.classList.add('mode-icon-only');
+    }
 
     // 1. アイコンラッパー
     const avatarWrap = document.createElement('div');
@@ -2401,6 +2522,9 @@ function syncSettingsTabInputs() {
   const initChargeInput = document.getElementById('settingsInitChargeInput');
   if (initChargeInput) initChargeInput.value = AppState.config.initCharge || 0;
 
+  const iconOnlyToggle = document.getElementById('settingsIconOnlyToggle');
+  if (iconOnlyToggle) iconOnlyToggle.checked = Boolean(AppState.config.iconOnly);
+
   renderSettingsPickupTags();
 }
 
@@ -2421,6 +2545,11 @@ function saveSettingsFromTab() {
     if (isNaN(val) || val < 0) val = 0;
     if (val > 199) val = 199;
     AppState.config.initCharge = val;
+  }
+
+  const iconOnlyToggle = document.getElementById('settingsIconOnlyToggle');
+  if (iconOnlyToggle) {
+    AppState.config.iconOnly = iconOnlyToggle.checked;
   }
 
   recalculatePullsIndexAndCharge();
@@ -2571,6 +2700,9 @@ function initEventListeners() {
   // 次の10連へ ▶（次の10連がある場合のみ移動、最終ページで押した時はシェイクアニメーション）
   if (btnSubmitNext) {
     btnSubmitNext.addEventListener('click', () => {
+      if (!checkMissing100ThPull()) {
+        return;
+      }
       const currentEditingId = AppState.currentSession.editingBatchId;
       const batches = getAllBatches();
 
@@ -2618,7 +2750,7 @@ function initEventListeners() {
   // ✔ 確定して集計へ
   if (btnSubmitOk) {
     btnSubmitOk.addEventListener('click', () => {
-      commitCurrentSheet();
+      commitCurrentSheet(true);
       switchTab('tabDashboard');
     });
   }
@@ -2629,6 +2761,17 @@ function initEventListeners() {
 
   if (btnCancel) btnCancel.addEventListener('click', cancelSettingsFromTab);
   if (btnSave) btnSave.addEventListener('click', saveSettingsFromTab);
+
+  // アイコンのみ表示トグル (即時反映＆配信同期)
+  const iconOnlyToggle = document.getElementById('settingsIconOnlyToggle');
+  if (iconOnlyToggle) {
+    iconOnlyToggle.addEventListener('change', (e) => {
+      AppState.config.iconOnly = e.target.checked;
+      persistState();
+      renderDirectoryGrid();
+      broadcastSyncState();
+    });
+  }
 
   // 左右分割確率ボタン (3% / 6%)
   const btnRate3 = document.getElementById('btnRate3');
@@ -2658,15 +2801,7 @@ function initEventListeners() {
   }
   initSettingsPickupSuggest();
 
-  // テーマ切り替え (存在する場合のみ)
-  const btnThemeCyan = document.getElementById('btnThemeCyan');
-  const btnThemeDark = document.getElementById('btnThemeDark');
-  if (btnThemeCyan) {
-    btnThemeCyan.addEventListener('click', () => applyTheme('theme-cyan-light'));
-  }
-  if (btnThemeDark) {
-    btnThemeDark.addEventListener('click', () => applyTheme('theme-tactical-dark'));
-  }
+
 
   // 設定から仮登録モーダル起動
   const btnOpenCustom = document.getElementById('btnOpenCustomModalFromSettings');
@@ -2783,7 +2918,6 @@ function initStreamOverlayTools() {
   const btnCopy = document.getElementById('btnCopyOverlayUrl');
   const btnPopout = document.getElementById('btnPopoutWindow');
   const btnOpenOverlay = document.getElementById('btnOpenOverlayWindow');
-  const btnToggleStream = document.getElementById('btnToggleStreamMode');
 
   // 現在のページURLからOBSオーバーレイ用URLを生成
   let baseUrl = window.location.href.split('?')[0].split('#')[0];
@@ -2791,7 +2925,7 @@ function initStreamOverlayTools() {
   if (overlayUrl.startsWith('file:')) {
     overlayUrl += '?mode=overlay#overlay';
   } else {
-    overlayUrl += '?mode=overlay';
+    overlayUrl += '?mode=overlay&room=' + encodeURIComponent(syncRoomId);
   }
 
   if (urlInput) {
@@ -2900,27 +3034,14 @@ function initStreamOverlayTools() {
           const startLeft = Math.max(10, Math.floor((availW - totalWidth) / 2));
           const topPos = Math.max(10, Math.floor((availH - winH) / 2));
 
-          const mini = openMiniWindow(startLeft, topPos);
+          // ポップアップブロッカー回避: 単一ウィンドウのみを開く
           openOverlayWindow(startLeft + winW + 10, topPos);
-          setTimeout(() => {
-            if (mini && !mini.closed) {
-              try { mini.focus(); } catch (e) {}
-            }
-          }, 150);
         }
       }
     });
   }
 
-  if (btnToggleStream) {
-    btnToggleStream.addEventListener('click', () => {
-      document.body.classList.toggle('stream-overlay-mode');
-      if (document.body.classList.contains('stream-overlay-mode')) {
-        switchTab('tabDashboard');
-        renderConvergenceChart();
-      }
-    });
-  }
+
 }
 
 function copyHistoryTsv() {
@@ -2982,11 +3103,22 @@ function undoLastPulls() {
     // 直前のバッチ（10連または1連）を一括取り消し
     AppState.pulls = AppState.pulls.filter(p => p.batchId !== lastBatchId);
   }
+  recalculatePullsIndexAndCharge();
   persistState();
+
+  const remainingBatches = getAllBatches();
+  if (remainingBatches.length > 0) {
+    loadBatchById(remainingBatches[remainingBatches.length - 1]);
+  } else {
+    setupInputSheet();
+  }
+
   updateAllStats();
   renderHistoryTable();
   renderDirectoryGrid();
   renderConvergenceChart();
+  renderSheetTimelineNav();
+  broadcastSyncState();
 }
 
 // ==========================================================================
@@ -3093,25 +3225,7 @@ function initCropperEngine() {
   }
 
   // ズームイン・ズームアウト・リセットボタン
-  const btnZoomIn = document.getElementById('btnCropZoomIn');
-  const btnZoomOut = document.getElementById('btnCropZoomOut');
   const btnReset = document.getElementById('btnCropReset');
-  if (btnZoomIn) {
-    btnZoomIn.addEventListener('click', () => {
-      if (!CropperState.img) return;
-      CropperState.scale = Math.min(4.0, CropperState.scale + 0.1);
-      if (slider) slider.value = CropperState.scale.toFixed(2);
-      drawCropper();
-    });
-  }
-  if (btnZoomOut) {
-    btnZoomOut.addEventListener('click', () => {
-      if (!CropperState.img) return;
-      CropperState.scale = Math.max(0.3, CropperState.scale - 0.1);
-      if (slider) slider.value = CropperState.scale.toFixed(2);
-      drawCropper();
-    });
-  }
   if (btnReset) {
     btnReset.addEventListener('click', () => {
       if (!CropperState.img) return;

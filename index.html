@@ -12,6 +12,8 @@
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&family=Noto+Sans+JP:wght@400;500;700;900&family=Outfit:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
   <!-- Chart.js CDN -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- PeerJS CDN (OBSブラウザソース間 P2P リアルタイム同期) -->
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 </head>
 <body class="theme-cyan-light">
 
@@ -192,10 +194,10 @@
                 1連に切替
               </button>
               <button id="btnDeleteCurrentPull" class="btn-danger-outline btn-action-delete" title="現在表示されている10連を履歴から削除して前の10連に戻る">
-                この10連を削除
+                10連削除
               </button>
               <button id="btnSheetSubmitOk" class="btn-green-submit btn-action-submit" title="入力を確定して集計画面へ進む">
-                ✔ 確定して集計へ
+                確定
               </button>
             </div>
           </div>
@@ -249,7 +251,7 @@
           <!-- 設定ヘッダー (タイトル & バージョン表記) -->
           <div class="settings-panel-header">
             <span class="card-head-title">⚙️ 設定</span>
-            <span class="version-badge" id="appVersionBadge">v1.0.36</span>
+            <span class="version-badge" id="appVersionBadge">v1.0.37</span>
           </div>
 
           <div class="settings-panel-body">
@@ -270,6 +272,14 @@
                 <span class="settings-inline-label">開始時にチャージ</span>
                 <input type="number" id="settingsInitChargeInput" class="styled-form-input settings-charge-input" min="0" max="199" value="0">
                 <span class="settings-inline-unit">チャージ</span>
+              </div>
+
+              <!-- アイコンのみ表示させるチェックボタン -->
+              <div class="settings-row-item settings-inline-row" style="margin-top: 4px; padding-top: 2px;">
+                <label class="settings-checkbox-label" style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 12.5px; font-weight: 700; color: var(--text-main); user-select: none;">
+                  <input type="checkbox" id="settingsIconOnlyToggle" class="styled-checkbox" style="width: 16px; height: 16px; cursor: pointer;">
+                  <span>アイコンのみ表示させる (生徒名・種別を非表示)</span>
+                </label>
               </div>
 
               <!-- ピックアップ生徒設定: 1行 (候補は上側に出る) -->
@@ -305,11 +315,14 @@
 
                 <!-- OBSブラウザソースURL -->
                 <div class="stream-url-block" style="margin-top: 4px;">
-                  <div class="stream-url-label" style="font-size: 11px; font-weight: 700; color: var(--text-muted); margin-bottom: 4px;">OBSブラウザソース用URL:</div>
+                  <div class="stream-url-label" style="font-size: 11px; font-weight: 700; color: var(--text-muted); margin-bottom: 4px;">OBSブラウザソース用URL: <span id="obsSyncBadge" class="status-badge badge-regular" style="font-size:10px; margin-left:6px;">同期準備中</span></div>
                   <div class="stream-url-copy-box">
                     <input type="text" id="streamOverlayUrlInput" class="styled-form-input stream-url-input" readonly placeholder="配信表示用URL生成中...">
                     <button type="button" id="btnCopyOverlayUrl" class="btn-cyan-sm">📋 URLコピー</button>
                   </div>
+                  <p class="settings-group-desc" style="font-size: 11px; margin-top: 6px; color: var(--text-muted);">
+                    💡 <b>OBS同期のヒント</b>: 同期URL（WebRTC P2P通信）によりOBSブラウザソースへ即時自動同期されます。また、OBS上部メニューの「ドック」→「カスタムブラウザドック」に手元操作URLを登録することでも直接同期可能です。
+                  </p>
                 </div>
               </div>
             </div>
@@ -447,8 +460,9 @@
         </div>
 
         <details class="github-sync-drawer">
-          <summary>🌐 GitHub共有設定 (他の利用者と共有)</summary>
+          <summary>🌐 GitHub共有設定 (※リポジトリ管理者専用)</summary>
           <div class="github-sync-inner">
+            <p style="font-size:11px; color:#ef4444; margin-bottom:6px; font-weight:bold;">※作者・リポジトリ管理者のみ利用可能です。一般の利用者は設定不要です。</p>
             <div class="github-row">
               <input type="password" id="githubTokenInput" class="styled-form-input" placeholder="GitHub Personal Access Token">
               <button id="btnSaveGithubToken" class="btn-cyan-sm">保存</button>
@@ -481,42 +495,7 @@
     </div>
   </dialog>
 
-  <!-- ========================================================================= -->
-  <!-- 配信（OBS）専用オーバーレイHUD -->
-  <!-- ========================================================================= -->
-  <div class="stream-overlay-layer" id="streamOverlayLayer" style="display: none;">
-    <div class="stream-hud">
-      <div class="stream-hud-header">
-        <div class="stream-title">SCHALE GACHA HUD</div>
-        <div class="stream-mode-badge" id="streamModeBadge">3% 通常</div>
-      </div>
-      <div class="stream-stats-row">
-        <div class="stream-stat-item">
-          <span class="s-label">総ガチャ</span>
-          <span class="s-val"><b id="streamTotalPulls">0</b><small>連</small></span>
-        </div>
-        <div class="stream-stat-item">
-          <span class="s-label">☆３確率</span>
-          <span class="s-val" id="streamThreeStarRate">0.00%</span>
-        </div>
-        <div class="stream-stat-item highlight-pu">
-          <span class="s-label">PU確率</span>
-          <span class="s-val" id="streamPickupRate">0.00%</span>
-        </div>
-        <div class="stream-stat-item highlight-win">
-          <span class="s-label">50%勝率</span>
-          <span class="s-val" id="streamWinRate">0.0%</span>
-        </div>
-        <div class="stream-stat-item highlight-charge">
-          <span class="s-label">チャージ</span>
-          <span class="s-val" id="streamCharge">0/100</span>
-        </div>
-      </div>
-      <button class="stream-exit-btn" id="btnExitStreamMode">✕ 閉じる</button>
-    </div>
-  </div>
-
-  <!-- JavaScriptメインロジック -->
+<!-- JavaScriptメインロジック -->
   <script src="app.js"></script>
 </body>
 </html>

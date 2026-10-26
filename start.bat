@@ -1,9 +1,9 @@
 @echo off
 chcp 65001 > nul
-title BA Gacha Live Tracker (v1.0.1)
+title BA Gacha Live Tracker (v1.0.37)
 
 echo ========================================================
-echo   ブルアカ リアルタイムガチャ集計 (v1.0.1)
+echo   ブルアカ リアルタイムガチャ集計 (v1.0.37)
 echo   Blue Archive Gacha Live Tracker
 echo ========================================================
 echo.
