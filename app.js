@@ -1,10 +1,10 @@
 /**
  * ブルーアーカイブ リアルタイムガチャ集計 (BA Gacha Live Tracker)
- * Version: v1.0.41
+ * Version: v1.0.42
  * Core Application Logic & State Management
  */
 
-const APP_VERSION = 'v1.0.41';
+const APP_VERSION = 'v1.0.42';
 
 // P2P WebRTC (PeerJS) 同期管理 (Chrome ⇄ OBSブラウザソース間のプロセス間通信)
 let peerInstance = null;
@@ -2808,9 +2808,11 @@ function initEventListeners() {
   // 4. 設定タブ操作ボタン
   const btnCancel = document.getElementById('btnCancelSettings');
   const btnSave = document.getElementById('btnSaveSettings');
+  const btnSaveTop = document.getElementById('btnSaveSettingsTop');
 
   if (btnCancel) btnCancel.addEventListener('click', cancelSettingsFromTab);
   if (btnSave) btnSave.addEventListener('click', saveSettingsFromTab);
+  if (btnSaveTop) btnSaveTop.addEventListener('click', saveSettingsFromTab);
 
   // アイコンのみ表示トグル (即時反映＆配信同期)
   const iconOnlyToggle = document.getElementById('settingsIconOnlyToggle');

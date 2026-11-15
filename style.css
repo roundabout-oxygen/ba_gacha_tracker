@@ -582,6 +582,19 @@ body.theme-tactical-dark .settings-group-title {
   color: #38bdf8;
 }
 
+.settings-group-title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-settings-save-inline {
+  font-size: 11.5px;
+  padding: 4px 12px;
+  line-height: 1.3;
+}
+
 .settings-row-item {
   width: 100%;
 }
@@ -3168,12 +3181,13 @@ body.stream-overlay-mode .chart-container-card {
 }
 
 .three-star-item-card.mode-icon-only {
-  padding: 3px !important;
+  padding: 0 !important;
   justify-content: center !important;
   align-items: center !important;
   aspect-ratio: 1 / 1 !important;
   box-sizing: border-box !important;
   width: 100% !important;
+  border-radius: 8px !important;
   overflow: hidden !important;
 }
 
@@ -3185,6 +3199,8 @@ body.stream-overlay-mode .chart-container-card {
 .three-star-item-card.mode-icon-only .ts-card-avatar-wrap {
   width: 100% !important;
   height: 100% !important;
+  max-width: 100% !important;
+  max-height: 100% !important;
   margin-bottom: 0 !important;
   display: flex !important;
   align-items: center !important;
@@ -3196,7 +3212,9 @@ body.stream-overlay-mode .chart-container-card {
   width: 100% !important;
   height: 100% !important;
   object-fit: cover !important;
-  border-radius: 5px !important;
+  border: none !important;
+  border-radius: 0 !important;
+  background: transparent !important;
   display: block !important;
 }
 

@@ -251,13 +251,16 @@
           <!-- 設定ヘッダー (タイトル & バージョン表記) -->
           <div class="settings-panel-header">
             <span class="card-head-title">⚙️ 設定</span>
-            <span class="version-badge" id="appVersionBadge">v1.0.41</span>
+            <span class="version-badge" id="appVersionBadge">v1.0.42</span>
           </div>
 
           <div class="settings-panel-body">
             <!-- 1. 初期設定グループカード (添付画像 赤枠) -->
             <div class="settings-group-card">
-              <div class="settings-group-title">初期設定</div>
+              <div class="settings-group-title settings-group-title-row">
+                <span>初期設定</span>
+                <button type="button" id="btnSaveSettingsTop" class="btn-dialog-save btn-settings-save-inline">設定を保存</button>
+              </div>
 
               <!-- ガチャ枠の確率: 左右分割ボタン (左: 3%, 右: 6%) -->
               <div class="settings-row-item">
@@ -309,38 +312,7 @@
               </div>
             </div>
 
-            <!-- 2. 小窓化 ＆ 配信連携設定 (OBS Studio) -->
-            <div class="settings-group-card">
-              <div class="settings-group-title">小窓化 ＆ 配信連携 (OBS Studio)</div>
-              <p class="settings-group-desc">
-                手元で操作・入力を行うための<b>操作小窓</b>と、OBSに表示する<b>配信用オーバーレイ</b>を分離してご利用いただけます。
-              </p>
-              <div class="settings-stream-tools">
-                <!-- 小窓化ボタン & 配信プレビューボタン -->
-                <div class="stream-action-btns">
-                  <button type="button" id="btnPopoutWindow" class="btn-cyan-outline settings-group-btn btn-popout-large" title="手元でガチャ入力・編集ができる小窓を開きます">
-                    🗔 小窓化
-                  </button>
-                  <button type="button" id="btnOpenOverlayWindow" class="btn-cyan-outline settings-group-btn btn-overlay-small" title="小窓と並べて配信用プレビュー画面を開きます">
-                    🎥 配信プレビュー画面(OBS用)
-                  </button>
-                </div>
-
-                <!-- OBSブラウザソースURL -->
-                <div class="stream-url-block" style="margin-top: 4px;">
-                  <div class="stream-url-label" style="font-size: 11px; font-weight: 700; color: var(--text-muted); margin-bottom: 4px;">OBSブラウザソース用URL: <span id="obsSyncBadge" class="status-badge badge-regular" style="font-size:10px; margin-left:6px;">同期準備中</span></div>
-                  <div class="stream-url-copy-box">
-                    <input type="text" id="streamOverlayUrlInput" class="styled-form-input stream-url-input" readonly placeholder="配信表示用URL生成中...">
-                    <button type="button" id="btnCopyOverlayUrl" class="btn-cyan-sm">📋 URLコピー</button>
-                  </div>
-                  <p class="settings-group-desc" style="font-size: 11px; margin-top: 6px; color: var(--text-muted);">
-                    💡 <b>OBS同期のヒント</b>: 同期URL（WebRTC P2P通信）によりOBSブラウザソースへ即時自動同期されます。また、OBS上部メニューの「ドック」→「カスタムブラウザドック」に手元操作URLを登録することでも直接同期可能です。
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <!-- 3. 仮登録グループカード (添付画像 緑枠) -->
+            <!-- 2. 仮登録グループカード (添付画像 緑枠) -->
             <div class="settings-group-card">
               <div class="settings-group-title">仮登録</div>
               <div class="settings-custom-tools-btns">
