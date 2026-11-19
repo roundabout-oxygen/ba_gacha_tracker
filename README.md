@@ -11,11 +11,23 @@
 - **OBS Studio 直接連携**: カスタムブラウザドックで入力した結果を、透明背景のブラウザソースへゼロ遅延で自動同期
 - **生徒アイコンの仮登録**: 未実装の最新生徒アイコンを画像切り抜きで即時追加・共有可能
 
-## OBS Studio 設定方法
+## ブルアカ ガチャ集計ツール（OBS設定）
 
-1. **表示用（ブラウザソース）**
-   - ソース「＋」→「ブラウザ」→ URL: `https://roundabout-oxygen.github.io/ba_gacha_tracker/?mode=overlay#overlay`
-   - 推奨サイズ: 横（幅） `505` × 縦（高さ） `700`（背景自動透過）
-2. **入力用（カスタムブラウザドック）**
-   - 上メニュー「ドック」→「カスタムブラウザドック」→ ドック名: `ブルアカガチャ操作`、URL: `https://roundabout-oxygen.github.io/ba_gacha_tracker/`
-   - 「適用」を押してドック内で結果を入力すると、配信画面へ即座に反映されます
+### ① 表示用（配信画面に出す）
+OBSのソース「＋」→「ブラウザ」→
+
+- URL：
+```text
+https://roundabout-oxygen.github.io/ba_gacha_tracker/?mode=overlay#overlay
+```
+- 横（幅）：`505`　縦（高さ）：`700`
+
+### ② 入力用（手元で操作する）
+OBS上メニュー「ドック」→「カスタムブラウザドック」→
+
+- ドック名：`ブルアカガチャ操作`
+- URL：
+```text
+https://roundabout-oxygen.github.io/ba_gacha_tracker/
+```
+→「適用」を押す
